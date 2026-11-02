@@ -68,7 +68,7 @@
         }
         ::-webkit-scrollbar { width: 3px; height: 3px; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
-        #leaflet-map-container { z-index: 10; }
+        #leaflet-map-container { z-index: 10; width: 100%; height: 190px; }
     </style>
 </head>
 
@@ -777,16 +777,29 @@
             try {
                 leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([35.0116, 135.7681], 12);
                 L.control.zoom({ position: 'topright' }).addTo(leafletMap);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                
+                // 改用完全免金鑰、無 403 限制且全球通用的 Esri World Street Map
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
                     maxZoom: 19,
-                    attribution: '&copy; OpenStreetMap'
+                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
                 }).addTo(leafletMap);
+
                 mapMarkersLayer = L.layerGroup().addTo(leafletMap);
-            } catch(e) {}
+            } catch(e) {
+                console.warn("Leaflet init error:", e);
+            }
         }
 
         function updateLeafletMapMarkers() {
+            if (!leafletMap) {
+                initLeafletMap();
+            }
             if (!leafletMap || !mapMarkersLayer) return;
+            
+            setTimeout(() => {
+                leafletMap.invalidateSize();
+            }, 100);
+
             mapMarkersLayer.clearLayers();
             const dayEvents = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab && e.address);
             let latCenter = 35.0116, lngCenter = 135.7681;
@@ -801,7 +814,6 @@
             if (dayEvents.length > 0) {
                 leafletMap.setView([latCenter, lngCenter], 13);
             }
-            setTimeout(() => { leafletMap.invalidateSize(); }, 200);
         }
 
         function renderExpenses() {
@@ -1013,8 +1025,16 @@
                 if (btn) btn.className = i === page ? "flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600" : "flex flex-col items-center gap-0.5 text-[10px] font-bold text-slate-400";
             }
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (page === 2 && leafletMap) {
-                setTimeout(() => { leafletMap.invalidateSize(); }, 250);
+            if (page === 2) {
+                setTimeout(() => {
+                    if (!leafletMap) {
+                        initLeafletMap();
+                    }
+                    if (leafletMap) {
+                        leafletMap.invalidateSize();
+                        updateLeafletMapMarkers();
+                    }
+                }, 250);
             }
             if (page === 3) {
                 renderExpenses();

@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>旅書 TravelBook - 雲端多裝置同步版</title>
+    <meta name="theme-color" content="#d97706">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="旅書">
+    
+    <!-- 內嵌 PWA Manifest -->
+    <script>
+        try {
+            const manifestData = {
+                "name": "旅書 TravelBook 雲端版",
+                "short_name": "旅書",
+                "start_url": "./index.html",
+                "display": "standalone",
+                "background_color": "#f8fafc",
+                "theme_color": "#d97706",
+                "icons": [{
+                    "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23d97706'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%23ffffff'%3E旅%3C/text%3E%3C/svg%3E",
+                    "sizes": "192x192",
+                    "type": "image/svg+xml"
+                }]
+            };
+            const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = URL.createObjectURL(blob);
+            document.head.appendChild(link);
+        } catch(e) {}
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        journal: { paper: '#fdfbf7', border: '#e6ded3', accent: '#d97706' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- SheetJS for Excel Processing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #f8fafc; 
+            color: #1e293b; 
+            user-select: none; 
+        }
+        ::-webkit-scrollbar { width: 3px; height: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
+        #leaflet-map-container { z-index: 10; }
+    </style>
+</head>
+
+<body class="h-full bg-slate-50 text-slate-800 flex flex-col justify-between overflow-x-hidden">
+    
+    <!-- 頂部導航列 -->
+    <header class="relative z-30 bg-white border-b border-slate-200 px-3 py-2.5 text-slate-800 flex items-center justify-between shadow-xs flex-shrink-0">
+        <div class="flex items-center space-x-2 min-w-0">
+            <div class="bg-amber-500 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
+                <i class="fa-solid fa-book-open"></i>
+            </div>
+            <div class="min-w-0">
+                <h1 id="header-trip-title" class="text-xs font-bold truncate text-slate-900">載入中...</h1>
+                <p id="header-trip-dates" class="text-[9px] text-slate-500">雲端同步旅遊手帳</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-shrink-0 text-xs">
+            <button onclick="installAppPrompt()" id="install-btn" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-xs text-[10px]">
+                <i class="fa-solid fa-download"></i> 安裝
+            </button>
+            <button onclick="openModal('project-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200" title="專案清單">
+                <i class="fa-solid fa-folder-open text-amber-600"></i>
+            </button>
+            <button onclick="openModal('share-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200" title="分享">
+                <i class="fa-solid fa-share-nodes text-sky-600"></i>
+            </button>
+            <button onclick="openModal('auth-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200 relative" title="帳號">
+                <i class="fa-solid fa-user-circle text-emerald-600"></i>
+                <span id="cloud-sync-indicator" class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-slate-300" title="雲端同步狀態"></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="relative z-20 flex-1 flex flex-col p-3 overflow-y-auto max-w-md mx-auto w-full pb-24" id="main-swipe-area">
+        <div class="flex-1 flex flex-col pb-4">
+            
+            <!-- 第 1 頁：封面與基本資料 -->
+            <div id="page-1" class="space-y-3 page-panel">
+                <div class="relative h-44 rounded-2xl overflow-hidden shadow-sm bg-slate-200 border border-slate-200">
+                    <img id="cover-photo" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
+                        <div class="text-white">
+                            <span class="text-[9px] uppercase tracking-widest bg-amber-500 font-bold px-1.5 py-0.5 rounded text-white">Travel Book</span>
+                            <h2 id="cover-trip-title" class="text-base font-bold mt-1 text-white">載入中...</h2>
+                        </div>
+                    </div>
+                    <button onclick="openModal('edit-trip-modal')" class="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-xs">
+                        <i class="fa-solid fa-pen"></i> 編輯封面
+                    </button>
+                </div>
+
+                <!-- 四張點擊即編輯的摘要卡片 -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-amber-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-amber-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                        <i class="fa-regular fa-calendar-days text-amber-600 text-sm mb-0.5"></i>
+                        <p class="text-[10px] text-slate-500">日期時間 (點擊編輯)</p>
+                        <p id="cover-dates" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
+                    </div>
+                    <div onclick="openModal('edit-trip-modal')" class="bg-sky-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-sky-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                        <i class="fa-solid fa-location-dot text-sky-600 text-sm mb-0.5"></i>
+                        <p class="text-[10px] text-slate-500">主要目的地 (點擊編輯)</p>
+                        <p id="cover-destination" class="text-xs font-bold text-slate-800 mt-0.5 truncate">-</p>
+                    </div>
+                    <div onclick="openModal('edit-trip-modal')" class="bg-emerald-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-emerald-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                        <i class="fa-solid fa-coins text-emerald-600 text-sm mb-0.5"></i>
+                        <p class="text-[10px] text-slate-500">預算預估 (點擊編輯)</p>
+                        <p id="cover-budget" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
+                    </div>
+                    <div onclick="openModal('edit-trip-modal')" class="bg-purple-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-purple-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                        <i class="fa-solid fa-users text-purple-600 text-sm mb-0.5"></i>
+                        <p class="text-[10px] text-slate-500">同行夥伴 (點擊編輯)</p>
+                        <p id="cover-members" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
+                    </div>
+                </div>
+
+                <div onclick="openModal('edit-trip-modal')" class="bg-white p-3 rounded-xl border border-slate-200 cursor-pointer shadow-2xs">
+                    <h3 class="text-[11px] font-bold text-slate-600 mb-1"><i class="fa-solid fa-quote-left mr-1 text-amber-500"></i> 旅遊備忘 / 旅程前言 (點擊編輯)</h3>
+                    <p id="cover-notes" class="text-xs text-slate-700 leading-relaxed">點擊此處編輯旅程備忘...</p>
+                </div>
+            </div>
+
+            <!-- 第 2 頁：每日行程與地圖 -->
+            <div id="page-2" class="space-y-3 page-panel hidden">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-map-location-dot text-amber-600"></i> 行程明細
+                    </h2>
+                    <div class="flex gap-1.5">
+                        <button onclick="downloadExcelTemplate()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-2 py-1 rounded font-medium">範本</button>
+                        <button onclick="openModal('excel-modal')" class="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded font-medium">匯入</button>
+                        <button onclick="openModal('add-event-modal')" class="bg-amber-600 text-white text-[10px] px-2 py-1 rounded font-medium"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                </div>
+
+                <!-- 天數導覽列 -->
+                <div id="day-tabs-container" class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"></div>
+
+                <!-- 地圖區塊 -->
+                <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                    <div class="flex items-center justify-between px-1">
+                        <span class="text-[11px] font-bold text-slate-700"><i class="fa-solid fa-map text-amber-500 mr-1"></i> 景點地圖檢視 (繁體中文)</span>
+                    </div>
+                    <div id="leaflet-map-container" class="w-full h-48 rounded-lg overflow-hidden border border-slate-200 bg-slate-100"></div>
+                </div>
+
+                <!-- 行程列表 -->
+                <div id="itinerary-timeline" class="space-y-2"></div>
+            </div>
+
+            <!-- 第 3 頁：花費統計與圓餅圖 -->
+            <div id="page-3" class="space-y-3 page-panel hidden">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-receipt text-emerald-600"></i> 花費記帳
+                    </h2>
+                    <button onclick="openModal('add-expense-modal')" class="bg-emerald-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">
+                        <i class="fa-solid fa-plus"></i> 新增
+                    </button>
+                </div>
+
+                <!-- 篩選列 -->
+                <div class="bg-white p-2.5 rounded-xl border border-slate-200 grid grid-cols-3 gap-1.5 text-[10px]">
+                    <select id="expense-filter-date" onchange="renderExpenses()" class="bg-slate-50 border border-slate-200 rounded p-1 outline-none">
+                        <option value="ALL">全部日期</option>
+                    </select>
+                    <select id="expense-filter-category" onchange="renderExpenses()" class="bg-slate-50 border border-slate-200 rounded p-1 outline-none">
+                        <option value="ALL">全部分類</option>
+                    </select>
+                    <select id="expense-filter-payer" onchange="renderExpenses()" class="bg-slate-50 border border-slate-200 rounded p-1 outline-none">
+                        <option value="ALL">全部付款</option>
+                    </select>
+                </div>
+
+                <!-- 摘要卡片 -->
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                        <p class="text-[9px] text-slate-500">總支出</p>
+                        <p id="total-spent-display" class="text-xs font-bold text-slate-800 mt-0.5">NT$ 0</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                        <p class="text-[9px] text-slate-500">剩餘預算</p>
+                        <p id="remaining-budget-display" class="text-xs font-bold text-emerald-600 mt-0.5">NT$ 0</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                        <p class="text-[9px] text-slate-500">人均分攤</p>
+                        <p id="per-person-display" class="text-xs font-bold text-sky-600 mt-0.5">NT$ 0</p>
+                    </div>
+                </div>
+
+                <!-- 圓餅圖與比例 -->
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-bold text-slate-700">分類支出佔比</h4>
+                        <div class="flex gap-1">
+                            <button onclick="setChartType('pie')" id="btn-chart-pie" class="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold">圓餅圖</button>
+                            <button onclick="setChartType('doughnut')" id="btn-chart-doughnut" class="text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">環形圖</button>
+                        </div>
+                    </div>
+                    <div class="relative h-48 w-full flex items-center justify-center">
+                        <canvas id="expense-pie-chart"></canvas>
+                    </div>
+                    <div id="expense-bar-chart" class="space-y-1.5 text-[11px] pt-2"></div>
+                </div>
+
+                <!-- 明細列表 -->
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <h4 class="text-xs font-bold text-slate-700 mb-2">支出明細紀錄</h4>
+                    <div id="expense-list-container" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <!-- 第 4 頁：行李清單 -->
+            <div id="page-4" class="space-y-3 page-panel hidden">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-clipboard-check text-indigo-600"></i> 行李清單
+                    </h2>
+                    <button onclick="addChecklistItemPrompt()" class="bg-indigo-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">
+                        <i class="fa-solid fa-plus"></i> 新增
+                    </button>
+                </div>
+
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
+                        <span>打包進度</span>
+                        <span id="checklist-progress-text">0 / 0 (0%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div id="checklist-progress-bar" class="bg-indigo-600 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div id="checklist-container" class="space-y-2"></div>
+            </div>
+
+            <!-- 第 5 頁：匯出與總覽 -->
+            <div id="page-5" class="space-y-3 page-panel hidden">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3 text-xs">
+                    <h2 class="text-sm font-bold text-slate-900 border-b pb-2"><i class="fa-solid fa-cloud-arrow-down mr-1 text-slate-700"></i> 雲端與匯出總覽</h2>
+                    <div>
+                        <h3 id="summary-trip-title" class="font-bold text-slate-800 text-sm">載入中...</h3>
+                        <p id="summary-trip-info" class="text-slate-500 text-[11px] mt-0.5">日期與花費摘要</p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="window.print()" class="flex-1 bg-slate-900 text-white py-2 rounded-lg font-medium shadow-2xs"><i class="fa-solid fa-file-pdf mr-1"></i> 列印 PDF</button>
+                        <button onclick="exportTripJSON()" class="flex-1 bg-slate-100 text-slate-800 py-2 rounded-lg font-medium border"><i class="fa-solid fa-download mr-1"></i> 備份 JSON</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 底部固定導航列 -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-3 py-2 flex items-center justify-around text-slate-400 flex-shrink-0 shadow-lg">
+        <button onclick="goToPage(1)" id="nav-btn-1" class="flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600">
+            <i class="fa-solid fa-book-open text-base"></i> <span>封面</span>
+        </button>
+        <button onclick="goToPage(2)" id="nav-btn-2" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
+            <i class="fa-solid fa-map-location-dot text-base"></i> <span>行程</span>
+        </button>
+        <button onclick="goToPage(3)" id="nav-btn-3" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
+            <i class="fa-solid fa-receipt text-base"></i> <span>花費</span>
+        </button>
+        <button onclick="goToPage(4)" id="nav-btn-4" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
+            <i class="fa-solid fa-clipboard-check text-base"></i> <span>行李</span>
+        </button>
+        <button onclick="goToPage(5)" id="nav-btn-5" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
+            <i class="fa-solid fa-share-nodes text-base"></i> <span>總覽</span>
+        </button>
+    </nav>
+
+    <!-- 彈窗群組 -->
+
+    <!-- 1. 編輯專案 -->
+    <div id="edit-trip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative max-h-[85vh] overflow-y-auto text-xs">
+            <button onclick="closeModal('edit-trip-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">編輯旅書資訊</h3>
+            <form onsubmit="handleSaveTripDetails(event)" class="space-y-2.5">
+                <div><label class="block font-bold text-slate-700 mb-1">行程名稱</label><input type="text" id="input-trip-title" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">開始日期</label><input type="date" id="input-trip-start" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">結束日期</label><input type="date" id="input-trip-end" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">目的地</label><input type="text" id="input-trip-destination" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="input-trip-budget" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="input-trip-members" min="1" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">封面圖片來源</label>
+                    <div class="flex gap-2 mb-1.5">
+                        <button type="button" onclick="switchEditCoverMode('url')" id="btn-edit-url" class="flex-1 py-1 rounded bg-amber-500 text-white font-bold">網址</button>
+                        <button type="button" onclick="switchEditCoverMode('file')" id="btn-edit-file" class="flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold">上傳</button>
+                    </div>
+                    <div id="edit-cover-url-wrap"><input type="url" id="input-trip-cover" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div id="edit-cover-file-wrap" class="hidden">
+                        <input type="file" id="input-trip-cover-file" accept="image/*" onchange="handleEditCoverUpload(event)" class="w-full border border-slate-200 rounded p-1 text-[11px] bg-slate-50">
+                        <input type="hidden" id="input-trip-cover-base64">
+                    </div>
+                </div>
+                <div><label class="block font-bold text-slate-700 mb-1">旅遊備忘</label><textarea id="input-trip-notes" rows="2" class="w-full border border-slate-200 rounded p-1.5 outline-none"></textarea></div>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">儲存並同步雲端</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. 新增行程活動 -->
+    <div id="add-event-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('add-event-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增行程項目</h3>
+            <form onsubmit="handleAddEvent(event)" class="space-y-2.5">
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">第幾天</label><select id="event-day-select" class="w-full border border-slate-200 rounded p-1.5 outline-none"></select></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">時間</label><input type="time" id="event-time" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div><label class="block font-bold text-slate-700 mb-1">景點名稱</label><input type="text" id="event-title" required placeholder="例: 清水寺" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">地點 / 地址</label><input type="text" id="event-address" placeholder="例: 京都市東山區清水1丁目" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">類型</label>
+                        <select id="event-type" class="w-full border border-slate-200 rounded p-1.5 outline-none">
+                            <option value="sightseeing">⛩️ 景點</option><option value="food">🍜 美食</option><option value="transport">🚌 交通</option><option value="hotel">🏨 住宿</option><option value="shopping">🛍️ 購物</option>
+                        </select>
+                    </div>
+                    <div><label class="block font-bold text-slate-700 mb-1">花費 (TWD)</label><input type="number" id="event-cost" value="0" min="0" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">確認新增</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. 新增記帳 -->
+    <div id="add-expense-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('add-expense-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增記帳項目</h3>
+            <form onsubmit="handleAddExpense(event)" class="space-y-2.5">
+                <div><label class="block font-bold text-slate-700 mb-1">項目名稱</label><input type="text" id="expense-title" required placeholder="例: 午餐" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">金額 (TWD)</label><input type="number" id="expense-amount" required min="1" placeholder="500" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">日期</label><input type="date" id="expense-date" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">分類</label>
+                        <select id="expense-category" onchange="handleExpenseCategoryChange(this.value)" class="w-full border border-slate-200 rounded p-1.5 outline-none">
+                            <option value="food">🍜 餐飲美食</option><option value="transport">✈️ 交通運具</option><option value="hotel">🏨 住宿旅館</option><option value="tickets">🎫 門票娛樂</option><option value="shopping">🛍️ 購物伴手禮</option><option value="other">📦 其它雜項</option>
+                        </select>
+                    </div>
+                    <div><label class="block font-bold text-slate-700 mb-1">付款人</label><input type="text" id="expense-payer" placeholder="例如: 小明" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-2xs">記錄支出</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. Excel 匯入 -->
+    <div id="excel-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('excel-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-2 text-sm"><i class="fa-solid fa-file-excel text-emerald-600 mr-1"></i> 匯入 Excel 行程</h3>
+            <div class="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center cursor-pointer mb-3 bg-slate-50" onclick="document.getElementById('excel-file-input').click()">
+                <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 mb-1"></i>
+                <p class="font-bold text-slate-700">選擇 Excel / CSV 檔案</p>
+                <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelFileUpload(event)">
+            </div>
+            <div id="excel-preview-area" class="hidden mb-3">
+                <p class="font-bold text-slate-700 mb-1">預覽: <span id="excel-preview-count" class="text-emerald-600">0</span> 筆</p>
+                <div id="excel-preview-table" class="max-h-28 overflow-y-auto border border-slate-200 rounded p-1.5 bg-slate-50 space-y-1 text-[11px]"></div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="downloadExcelTemplate()" class="flex-1 bg-slate-100 text-slate-800 py-2 rounded font-medium">下載範本</button>
+                <button id="excel-confirm-btn" onclick="applyExcelDataToItinerary()" disabled class="flex-1 bg-emerald-600 disabled:opacity-40 text-white py-2 rounded font-medium shadow-2xs">確認匯入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 專案庫與新建專案 -->
+    <div id="project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('project-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm"><i class="fa-solid fa-folder-open text-amber-500 mr-1"></i> 我的雲端專案庫</h3>
+            <div id="projects-list-container" class="space-y-1.5 max-h-40 overflow-y-auto mb-3"></div>
+            <button onclick="openModal('new-project-modal'); closeModal('project-modal');" class="w-full bg-amber-600 text-white py-2 rounded-lg font-semibold shadow-2xs">建立新專案</button>
+        </div>
+    </div>
+
+    <!-- 建立全新旅遊專案視窗 -->
+    <div id="new-project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative max-h-[85vh] overflow-y-auto text-xs">
+            <button onclick="closeModal('new-project-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">建立全新雲端旅遊專案</h3>
+            <form onsubmit="handleCreateNewProject(event)" class="space-y-2.5">
+                <div><label class="block font-bold text-slate-700 mb-1">行程名稱</label><input type="text" id="new-trip-title" required placeholder="例: 東京自由行 5天4夜" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">開始日期</label><input type="date" id="new-trip-start" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">結束日期</label><input type="date" id="new-trip-end" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><label class="block font-bold text-slate-700 mb-1">目的地</label><input type="text" id="new-trip-destination" required placeholder="日本 東京" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="new-trip-budget" required placeholder="50000" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                </div>
+                <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="new-trip-members" min="1" value="2" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">封面圖片來源</label>
+                    <div class="flex gap-2 mb-1.5">
+                        <button type="button" onclick="switchNewCoverMode('url')" id="btn-new-url" class="flex-1 py-1 rounded bg-amber-500 text-white font-bold">網址</button>
+                        <button type="button" onclick="switchNewCoverMode('file')" id="btn-new-file" class="flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold">上傳</button>
+                    </div>
+                    <div id="new-cover-url-wrap"><input type="url" id="new-trip-cover" placeholder="https://..." class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div id="new-cover-file-wrap" class="hidden">
+                        <input type="file" id="new-trip-cover-file" accept="image/*" onchange="handleNewCoverUpload(event)" class="w-full border border-slate-200 rounded p-1 text-[11px] bg-slate-50">
+                        <input type="hidden" id="new-trip-cover-base64">
+                    </div>
+                </div>
+                <div><label class="block font-bold text-slate-700 mb-1">旅遊備忘</label><textarea id="new-trip-notes" rows="2" placeholder="寫下旅程期待..." class="w-full border border-slate-200 rounded p-1.5 outline-none"></textarea></div>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">建立並同步雲端</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 6. 分享權限 -->
+    <div id="share-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('share-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 mb-2 text-sm"><i class="fa-solid fa-share-nodes text-sky-500 mr-1"></i> 行程雲端分享</h3>
+            <div class="space-y-2.5">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">專案 ID 代碼</label>
+                    <div class="flex gap-1.5">
+                        <input type="text" id="share-key-display" readonly class="flex-1 bg-slate-50 border border-slate-200 rounded p-1.5 font-mono text-[10px]">
+                        <button onclick="copyToClipboard(document.getElementById('share-key-display').value)" class="bg-sky-600 text-white px-2.5 py-1 rounded shadow-2xs">複製</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 使用者帳號與雲端同步 -->
+    <div id="auth-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-4 shadow-xl relative text-xs">
+            <button onclick="closeModal('auth-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <div class="flex border-b border-slate-200 mb-3" id="auth-tab-headers">
+                <button onclick="switchAuthTab('login')" id="tab-login-btn" class="flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center">登入雲端</button>
+                <button onclick="switchAuthTab('register')" id="tab-register-btn" class="flex-1 pb-1.5 font-bold text-slate-400 text-center">註冊</button>
+            </div>
+            <form id="auth-login-form" onsubmit="handleUserLogin(event)" class="space-y-2.5">
+                <div><label class="block font-bold text-slate-700 mb-1">電子郵件</label><input type="email" id="login-email" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="login-password" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <button type="submit" class="w-full bg-slate-900 text-white font-semibold py-2 rounded-lg shadow-2xs">登入雲端</button>
+            </form>
+            <form id="auth-register-form" onsubmit="handleUserRegister(event)" class="space-y-2.5 hidden">
+                <div><label class="block font-bold text-slate-700 mb-1">電子郵件</label><input type="email" id="reg-email" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="reg-password" required minlength="6" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">註冊雲端帳號</button>
+            </form>
+            <div id="auth-logged-in-panel" class="hidden space-y-2.5">
+                <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                    <p class="text-slate-500 text-[10px]">已連線雲端帳號：</p>
+                    <p class="font-bold text-emerald-800 text-xs truncate" id="logged-user-display"></p>
+                </div>
+                <button onclick="handleUserLogout()" class="w-full bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg">登出雲端</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 吐司通知 -->
+    <div id="toast-container" class="fixed bottom-16 right-3 z-50 flex flex-col gap-1.5 pointer-events-none"></div>
+
+    <!-- Firebase SDKs & App Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'travel-journal-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDummyKeyForStaticDeployment",
+            authDomain: "travel-journal.firebaseapp.com",
+            projectId: "travel-journal"
+        };
+
+        let app, db, auth;
+        let currentUser = null;
+        let currentTripId = localStorage.getItem('last_trip_id') || 'default_trip';
+        let currentTripData = getInitialTripData();
+        let currentPage = 1;
+        const totalPages = 5;
+        let activeDayTab = 1;
+        let deferredPrompt = null;
+        let parsedExcelEvents = [];
+        let leafletMap = null;
+        let mapMarkersLayer = null;
+        let chartType = 'pie';
+        let expenseCanvasCtx = null;
+
+        const PRESET_CATEGORIES = {
+            food: '🍜 餐飲美食', transport: '✈️ 交通運具', hotel: '🏨 住宿旅館',
+            tickets: '🎫 門票娛樂', shopping: '🛍️ 購物伴手禮', other: '📦 其它雜項'
+        };
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    currentUser = user;
+                    const indicator = document.getElementById('cloud-sync-indicator');
+                    if (indicator) {
+                        indicator.className = `absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${user && !user.isAnonymous ? 'bg-emerald-500' : 'bg-amber-500'}`;
+                    }
+                    await loadTripFromCloud(currentTripId);
+                });
+            } catch (e) {
+                console.warn("Cloud init fallback to local:", e);
+            }
+
+            initPWAInstall();
+            renderTripData();
+            setupTouchSwipe();
+            initLeafletMap();
+        });
+
+        function initPWAInstall() {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                const btn = document.getElementById('install-btn');
+                if (btn) btn.classList.remove('hidden');
+            });
+            window.addEventListener('appinstalled', () => {
+                deferredPrompt = null;
+                const btn = document.getElementById('install-btn');
+                if (btn) btn.classList.add('hidden');
+                showToast('已成功安裝旅書 App！', 'success');
+            });
+        }
+
+        window.installAppPrompt = function() {
+            if (!deferredPrompt) {
+                showToast('請點選瀏覽器選單 (⋮) 並選擇「加到主畫面」或「安裝應用程式」', 'info');
+                return;
+            }
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    showToast('感謝您的安裝！', 'success');
+                }
+                deferredPrompt = null;
+            });
+        };
+
+        function getInitialTripData() {
+            return {
+                id: currentTripId,
+                title: '關西賞楓之旅 5天4夜',
+                startDate: '2026-10-15',
+                endDate: '2026-10-19',
+                destination: '日本 京都・大阪',
+                budget: 45000,
+                members: 3,
+                coverPhoto: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+                notes: '準備迎向一趟輕鬆愉快的賞楓古都之旅。',
+                itinerary: [
+                    { id: '1', day: 1, time: '09:30', title: '關西國際機場抵達', address: '關西國際機場', type: 'transport', cost: 1200, notes: '搭乘特急' },
+                    { id: '2', day: 1, time: '16:00', title: '清水寺夜楓', address: '清水寺', type: 'sightseeing', cost: 400, notes: '拍照留念' }
+                ],
+                expenses: [
+                    { id: 'e1', title: '特急車票', amount: 1200, category: 'transport', date: '2026-10-15', payer: '小明' },
+                    { id: 'e2', title: '清水寺門票', amount: 400, category: 'tickets', date: '2026-10-15', payer: '小華' }
+                ],
+                checklist: [
+                    { id: 'c1', text: '護照與日圓現金', done: true },
+                    { id: 'c2', text: '行動網卡 / 漫遊', done: false }
+                ]
+            };
+        }
+
+        async function saveTripToCloud() {
+            try {
+                localStorage.setItem('local_trip_' + currentTripId, JSON.stringify(currentTripData));
+                if (db && auth && auth.currentUser) {
+                    const uId = auth.currentUser.uid;
+                    const docRef = doc(db, 'artifacts', appId, 'users', uId, 'trips', currentTripId);
+                    await setDoc(docRef, currentTripData);
+                    showToast('已同步至雲端', 'success');
+                }
+            } catch (e) {
+                showToast('已儲存至本機', 'info');
+            }
+            renderTripData();
+        }
+
+        async function loadTripFromCloud(tId) {
+            currentTripId = tId;
+            localStorage.setItem('last_trip_id', currentTripId);
+            try {
+                if (db && auth && auth.currentUser) {
+                    const uId = auth.currentUser.uid;
+                    const docRef = doc(db, 'artifacts', appId, 'users', uId, 'trips', currentTripId);
+                    const snap = await getDoc(docRef);
+                    if (snap.exists()) {
+                        currentTripData = snap.data();
+                        renderTripData();
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            const local = localStorage.getItem('local_trip_' + currentTripId);
+            if (local) {
+                currentTripData = JSON.parse(local);
+            } else {
+                currentTripData = getInitialTripData();
+            }
+            renderTripData();
+        }
+
+        function renderTripData() {
+            try {
+                setElText('header-trip-title', currentTripData.title);
+                setElText('cover-trip-title', currentTripData.title);
+                setElText('summary-trip-title', currentTripData.title);
+                setElText('header-trip-dates', `${currentTripData.startDate} ~ ${currentTripData.endDate}`);
+                setElText('cover-dates', `${currentTripData.startDate.substr(5)} ~ ${currentTripData.endDate.substr(5)}`);
+                setElText('cover-destination', currentTripData.destination);
+                setElText('cover-budget', 'NT$ ' + Number(currentTripData.budget || 0).toLocaleString());
+                setElText('cover-members', currentTripData.members + ' 人');
+                setElText('cover-notes', currentTripData.notes);
+                
+                const coverImg = document.getElementById('cover-photo');
+                if (coverImg && currentTripData.coverPhoto) {
+                    coverImg.src = currentTripData.coverPhoto;
+                }
+
+                renderDayTabs();
+                renderItineraryTimeline();
+                populateExpenseFilterOptions();
+                renderExpenses();
+                renderChecklist();
+                renderSummarySheet();
+                updateLeafletMapMarkers();
+                const shareKeyEl = document.getElementById('share-key-display');
+                if (shareKeyEl) shareKeyEl.value = currentTripId;
+            } catch(e) {}
+        }
+
+        function setElText(id, txt) {
+            const el = document.getElementById(id);
+            if (el) el.innerText = txt;
+        }
+
+        function renderDayTabs() {
+            const container = document.getElementById('day-tabs-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const start = new Date(currentTripData.startDate);
+            const end = new Date(currentTripData.endDate);
+            let diffDays = 1;
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+                diffDays = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+            }
+
+            const daySelect = document.getElementById('event-day-select');
+            if (daySelect) {
+                daySelect.innerHTML = '';
+                for (let i = 1; i <= diffDays; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i; opt.innerText = `第 ${i} 天`;
+                    daySelect.appendChild(opt);
+                }
+            }
+
+            for (let i = 1; i <= diffDays; i++) {
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shadow-2xs ${
+                    activeDayTab === i ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'
+                }`;
+                btn.innerText = `Day ${i}`;
+                btn.onclick = () => {
+                    activeDayTab = i;
+                    renderDayTabs();
+                    renderItineraryTimeline();
+                    updateLeafletMapMarkers();
+                };
+                container.appendChild(btn);
+            }
+        }
+
+        function renderItineraryTimeline() {
+            const container = document.getElementById('itinerary-timeline');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const dayEvents = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab);
+            if (dayEvents.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 bg-white rounded-xl text-xs border border-slate-200">第 ${activeDayTab} 天尚無行程</div>`;
+                return;
+            }
+
+            dayEvents.sort((a,b) => a.time.localeCompare(b.time)).forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-start justify-between gap-2 text-xs';
+                div.innerHTML = `
+                    <div class="flex items-start gap-2 flex-1 min-w-0">
+                        <span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">${index + 1}</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1">
+                                <span class="font-mono text-slate-500 text-[10px] font-bold">${item.time}</span>
+                                <h4 class="font-bold text-slate-800 truncate">${item.title}</h4>
+                            </div>
+                            ${item.address ? `<p class="text-slate-500 text-[10px] truncate"><i class="fa-solid fa-map-pin text-amber-600 mr-0.5"></i>${item.address}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        ${item.cost > 0 ? `<span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">NT$ ${item.cost}</span>` : ''}
+                        <button onclick="window.deleteItineraryItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function getCategoryLabel(catKey) {
+            return PRESET_CATEGORIES[catKey] || ('🏷️ ' + catKey);
+        }
+
+        function initLeafletMap() {
+            if (leafletMap) return;
+            const mapEl = document.getElementById('leaflet-map-container');
+            if (!mapEl) return;
+            try {
+                leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([35.0116, 135.7681], 12);
+                L.control.zoom({ position: 'topright' }).addTo(leafletMap);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(leafletMap);
+                mapMarkersLayer = L.layerGroup().addTo(leafletMap);
+            } catch(e) {}
+        }
+
+        function updateLeafletMapMarkers() {
+            if (!leafletMap || !mapMarkersLayer) return;
+            mapMarkersLayer.clearLayers();
+            const dayEvents = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab && e.address);
+            let latCenter = 35.0116, lngCenter = 135.7681;
+            
+            dayEvents.forEach((item, idx) => {
+                const lat = latCenter + (idx * 0.015);
+                const lng = lngCenter + (idx * 0.015);
+                const marker = L.marker([lat, lng]).bindPopup(`<b>${item.title}</b><br>${item.address}`);
+                mapMarkersLayer.addLayer(marker);
+            });
+            
+            if (dayEvents.length > 0) {
+                leafletMap.setView([latCenter, lngCenter], 13);
+            }
+            setTimeout(() => { leafletMap.invalidateSize(); }, 200);
+        }
+
+        function renderExpenses() {
+            const allExpenses = currentTripData.expenses || [];
+            const dateSelect = document.getElementById('expense-filter-date');
+            const categorySelect = document.getElementById('expense-filter-category');
+            const payerSelect = document.getElementById('expense-filter-payer');
+
+            const sDate = dateSelect ? dateSelect.value : 'ALL';
+            const sCat = categorySelect ? categorySelect.value : 'ALL';
+            const sPayer = payerSelect ? payerSelect.value : 'ALL';
+
+            const filtered = allExpenses.filter(item => {
+                return (sDate === 'ALL' || item.date === sDate) &&
+                       (sCat === 'ALL' || item.category === sCat) &&
+                       (sPayer === 'ALL' || item.payer === sPayer);
+            });
+
+            const totalSpent = filtered.reduce((s, e) => s + Number(e.amount), 0);
+            const overallSpent = allExpenses.reduce((s, e) => s + Number(e.amount), 0);
+            const remaining = Number(currentTripData.budget || 0) - overallSpent;
+            const perPerson = Math.round(totalSpent / (Number(currentTripData.members) || 1));
+
+            setElText('total-spent-display', 'NT$ ' + totalSpent.toLocaleString());
+            setElText('remaining-budget-display', 'NT$ ' + remaining.toLocaleString());
+            setElText('per-person-display', 'NT$ ' + perPerson.toLocaleString());
+
+            const container = document.getElementById('expense-list-container');
+            if (container) {
+                container.innerHTML = '';
+                if (filtered.length === 0) {
+                    container.innerHTML = `<p class="text-[11px] text-slate-400 text-center py-3">無記帳紀錄</p>`;
+                } else {
+                    filtered.slice().reverse().forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px]';
+                        div.innerHTML = `
+                            <div>
+                                <span class="font-bold text-slate-800">${item.title}</span>
+                                <p class="text-[9px] text-slate-400">${item.date} | ${item.payer}</p>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-bold text-emerald-600">NT$ ${Number(item.amount).toLocaleString()}</span>
+                                <button onclick="window.deleteExpenseItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+            }
+            renderExpensePieChart(filtered, totalSpent);
+        }
+
+        window.renderExpenses = renderExpenses;
+
+        window.setChartType = function(type) {
+            chartType = type;
+            const btnPie = document.getElementById('btn-chart-pie');
+            const btnDoughnut = document.getElementById('btn-chart-doughnut');
+            if (btnPie) btnPie.className = type === 'pie' ? 'text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold' : 'text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold';
+            if (btnDoughnut) btnDoughnut.className = type === 'doughnut' ? 'text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold' : 'text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold';
+            renderExpenses();
+        };
+
+        function renderExpensePieChart(expenses, total) {
+            const canvas = document.getElementById('expense-pie-chart');
+            const barContainer = document.getElementById('expense-bar-chart');
+            if (!canvas || !barContainer) return;
+            barContainer.innerHTML = '';
+
+            if (!expenseCanvasCtx) {
+                expenseCanvasCtx = canvas.getContext('2d');
+            }
+
+            const catTotals = {};
+            expenses.forEach(e => {
+                const label = getCategoryLabel(e.category);
+                catTotals[label] = (catTotals[label] || 0) + Number(e.amount);
+            });
+
+            const labels = Object.keys(catTotals);
+            const dataVals = Object.values(catTotals);
+            const colors = ['#d97706', '#0284c7', '#059669', '#7c3aed', '#db2777', '#0891b2', '#475569'];
+
+            const ctx = expenseCanvasCtx;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.width = canvas.parentElement.clientWidth || 280;
+            canvas.height = 190;
+
+            if (expenses.length === 0 || total === 0) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '12px Noto Sans TC, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('尚無支出數據', canvas.width / 2, canvas.height / 2);
+                barContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-1">無支出比例資料</p>`;
+                return;
+            }
+
+            let startAngle = 0;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) - 15;
+
+            dataVals.forEach((val, i) => {
+                const sliceAngle = (val / total) * 2 * Math.PI;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                startAngle += sliceAngle;
+            });
+
+            if (chartType === 'doughnut') {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius * 0.55, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+            }
+
+            labels.forEach((label, i) => {
+                const amt = catTotals[label];
+                const pct = Math.round((amt / total) * 100);
+                const color = colors[i % colors.length];
+
+                const row = document.createElement('div');
+                row.className = 'space-y-1';
+                row.innerHTML = `
+                    <div class="flex justify-between text-[11px] font-bold text-slate-700">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${color}"></span>${label}</span>
+                        <span>NT$ ${amt.toLocaleString()} (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-300" style="width: ${pct}%; background:${color}"></div>
+                    </div>
+                `;
+                barContainer.appendChild(row);
+            });
+        }
+
+        function populateExpenseFilterOptions() {
+            const expenses = currentTripData.expenses || [];
+            const dateSel = document.getElementById('expense-filter-date');
+            const catSel = document.getElementById('expense-filter-category');
+            const payerSel = document.getElementById('expense-filter-payer');
+            if (!dateSel) return;
+
+            const dates = Array.from(new Set(expenses.map(e => e.date).filter(Boolean))).sort();
+            dateSel.innerHTML = '<option value="ALL">全部日期</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+
+            const cats = Array.from(new Set([...Object.keys(PRESET_CATEGORIES), ...expenses.map(e => e.category)]));
+            catSel.innerHTML = '<option value="ALL">全部分類</option>' + cats.map(c => `<option value="${c}">${getCategoryLabel(c)}</option>`).join('');
+
+            const payers = Array.from(new Set(expenses.map(e => e.payer).filter(Boolean))).sort();
+            payerSel.innerHTML = '<option value="ALL">全部付款</option>' + payers.map(p => `<option value="${p}">${p}</option>`).join('');
+        }
+
+        function renderChecklist() {
+            const list = currentTripData.checklist || [];
+            const container = document.getElementById('checklist-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const doneCount = list.filter(i => i.done).length;
+            const pct = list.length === 0 ? 0 : Math.round((doneCount / list.length) * 100);
+            setElText('checklist-progress-text', `${doneCount} / ${list.length} (${pct}%)`);
+            const bar = document.getElementById('checklist-progress-bar');
+            if (bar) bar.style.width = pct + '%';
+
+            list.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs shadow-2xs ${item.done ? 'bg-emerald-50/50 text-slate-400 line-through' : 'bg-white text-slate-800'}`;
+                div.onclick = () => { item.done = !item.done; saveTripToCloud(); };
+                div.innerHTML = `
+                    <div class="flex items-center gap-2"><i class="fa-regular ${item.done ? 'fa-square-check text-emerald-600' : 'fa-square text-slate-400'} text-sm"></i><span>${item.text}</span></div>
+                    <button onclick="event.stopPropagation(); window.deleteChecklistItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.deleteChecklistItem = function(id) {
+            currentTripData.checklist = currentTripData.checklist.filter(i => i.id !== id);
+            saveTripToCloud();
+        };
+
+        window.addChecklistItemPrompt = function() {
+            const t = prompt('請輸入行李項目:');
+            if (t && t.trim()) {
+                currentTripData.checklist.push({ id: 'c_' + Date.now(), text: t.trim(), done: false });
+                saveTripToCloud();
+            }
+        };
+
+        function renderSummarySheet() {
+            setElText('summary-trip-title', currentTripData.title);
+            const total = (currentTripData.expenses || []).reduce((s, e) => s + Number(e.amount), 0);
+            setElText('summary-trip-info', `日期: ${currentTripData.startDate}~${currentTripData.endDate} | 總花費: NT$ ${total.toLocaleString()}`);
+        }
+
+        window.goToPage = function(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            for (let i = 1; i <= totalPages; i++) {
+                const p = document.getElementById(`page-${i}`);
+                const btn = document.getElementById(`nav-btn-${i}`);
+                if (p) p.classList.toggle('hidden', i !== page);
+                if (btn) btn.className = i === page ? "flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600" : "flex flex-col items-center gap-0.5 text-[10px] font-bold text-slate-400";
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (page === 2 && leafletMap) {
+                setTimeout(() => { leafletMap.invalidateSize(); }, 250);
+            }
+            if (page === 3) {
+                renderExpenses();
+            }
+        };
+
+        function setupTouchSwipe() {
+            let startX = 0;
+            const mc = document.getElementById('main-swipe-area');
+            if (!mc) return;
+            mc.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
+            mc.addEventListener('touchend', (e) => {
+                const diff = e.changedTouches[0].clientX - startX;
+                if (diff < -65) goToPage(currentPage + 1);
+                if (diff > 65) goToPage(currentPage - 1);
+            });
+        }
+
+        window.downloadExcelTemplate = function() {
+            const headers = ["天數", "時間", "景點名稱", "地址", "類型", "費用", "備註"];
+            const samples = [[1, "09:30", "關西機場", "關西國際機場", "交通", 1200, "搭車"]];
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...samples]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "行程");
+            XLSX.writeFile(wb, "行程範本.xlsx");
+            showToast('已下載範本', 'success');
+        };
+
+        window.handleExcelFileUpload = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = function(ev) {
+                try {
+                    const data = new Uint8Array(ev.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                    parsedExcelEvents = [];
+                    for (let i = 1; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row || !row[2]) continue;
+                        parsedExcelEvents.push({
+                            id: 'ex_' + Date.now() + '_' + i,
+                            day: Number(row[0]) || 1, time: String(row[1] || '09:00'),
+                            title: String(row[2]), address: String(row[3] || row[2]),
+                            type: 'sightseeing', cost: Number(row[5]) || 0, notes: String(row[6] || '')
+                        });
+                    }
+                    setElText('excel-preview-count', parsedExcelEvents.length);
+                    const prevTable = document.getElementById('excel-preview-table');
+                    if (prevTable) prevTable.innerHTML = parsedExcelEvents.map(it => `<div>Day ${it.day} [${it.time}] ${it.title}</div>`).join('');
+                    const area = document.getElementById('excel-preview-area');
+                    if (area) area.classList.remove('hidden');
+                    const btn = document.getElementById('excel-confirm-btn');
+                    if (btn) btn.disabled = false;
+                    showToast('解析成功', 'success');
+                } catch(err) { showToast('解析失敗', 'error'); }
+            };
+            r.readAsArrayBuffer(file);
+        };
+
+        window.applyExcelDataToItinerary = function() {
+            if (parsedExcelEvents.length === 0) return;
+            currentTripData.itinerary.push(...parsedExcelEvents);
+            saveTripToCloud();
+            closeModal('excel-modal');
+            showToast('匯入成功', 'success');
+        };
+
+        window.switchEditCoverMode = function(mode) {
+            const urlWrap = document.getElementById('edit-cover-url-wrap');
+            const fileWrap = document.getElementById('edit-cover-file-wrap');
+            const btnUrl = document.getElementById('btn-edit-url');
+            const btnFile = document.getElementById('btn-edit-file');
+            if (urlWrap) urlWrap.classList.toggle('hidden', mode !== 'url');
+            if (fileWrap) fileWrap.classList.toggle('hidden', mode !== 'file');
+            if (btnUrl) btnUrl.className = mode === 'url' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+            if (btnFile) btnFile.className = mode === 'file' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+        };
+
+        window.handleEditCoverUpload = function(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                const base64Input = document.getElementById('input-trip-cover-base64');
+                if (base64Input) base64Input.value = ev.target.result;
+                showToast('圖片就緒', 'success');
+            };
+            r.readAsDataURL(f);
+        };
+
+        window.switchNewCoverMode = function(mode) {
+            const urlWrap = document.getElementById('new-cover-url-wrap');
+            const fileWrap = document.getElementById('new-cover-file-wrap');
+            const btnUrl = document.getElementById('btn-new-url');
+            const btnFile = document.getElementById('btn-new-file');
+            if (urlWrap) urlWrap.classList.toggle('hidden', mode !== 'url');
+            if (fileWrap) fileWrap.classList.toggle('hidden', mode !== 'file');
+            if (btnUrl) btnUrl.className = mode === 'url' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+            if (btnFile) btnFile.className = mode === 'file' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+        };
+
+        window.handleNewCoverUpload = function(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                const base64Input = document.getElementById('new-trip-cover-base64');
+                if (base64Input) base64Input.value = ev.target.result;
+                showToast('圖片就緒', 'success');
+            };
+            r.readAsDataURL(f);
+        };
+
+        window.handleSaveTripDetails = function(e) {
+            e.preventDefault();
+            currentTripData.title = document.getElementById('input-trip-title').value;
+            currentTripData.startDate = document.getElementById('input-trip-start').value;
+            currentTripData.endDate = document.getElementById('input-trip-end').value;
+            currentTripData.destination = document.getElementById('input-trip-destination').value;
+            currentTripData.budget = Number(document.getElementById('input-trip-budget').value);
+            currentTripData.members = Number(document.getElementById('input-trip-members').value);
+            let cp = document.getElementById('input-trip-cover-base64').value;
+            if (!cp) cp = document.getElementById('input-trip-cover').value || currentTripData.coverPhoto;
+            currentTripData.coverPhoto = cp;
+            currentTripData.notes = document.getElementById('input-trip-notes').value;
+            saveTripToCloud();
+            closeModal('edit-trip-modal');
+            showToast('已更新並同步雲端', 'success');
+        };
+
+        window.handleCreateNewProject = function(e) {
+            e.preventDefault();
+            const title = document.getElementById('new-trip-title').value;
+            const start = document.getElementById('new-trip-start').value;
+            const end = document.getElementById('new-trip-end').value;
+            const dest = document.getElementById('new-trip-destination').value;
+            const budget = Number(document.getElementById('new-trip-budget').value);
+            const mem = Number(document.getElementById('new-trip-members').value);
+            let cp = document.getElementById('new-trip-cover-base64').value || document.getElementById('new-trip-cover').value || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80';
+            const notes = document.getElementById('new-trip-notes').value;
+
+            const newId = 'trip_' + Math.random().toString(36).substr(2, 8);
+            currentTripId = newId;
+            currentTripData = {
+                id: newId, title, startDate: start, endDate: end, destination: dest, budget, members: mem,
+                coverPhoto: cp, notes, itinerary: [], expenses: [],
+                checklist: [{ id: 'c1', text: '護照與證件', done: false }]
+            };
+
+            saveTripToCloud();
+            closeModal('new-project-modal');
+            goToPage(1);
+            showToast('新專案建立成功', 'success');
+        };
+
+        window.handleAddEvent = function(e) {
+            e.preventDefault();
+            currentTripData.itinerary.push({
+                id: 'e_' + Date.now(),
+                day: Number(document.getElementById('event-day-select').value),
+                time: document.getElementById('event-time').value,
+                title: document.getElementById('event-title').value,
+                address: document.getElementById('event-address').value,
+                type: document.getElementById('event-type').value,
+                cost: Number(document.getElementById('event-cost').value) || 0,
+                notes: ''
+            });
+            saveTripToCloud();
+            closeModal('add-event-modal');
+            showToast('行程新增成功', 'success');
+        };
+
+        window.deleteItineraryItem = function(id) {
+            currentTripData.itinerary = currentTripData.itinerary.filter(i => i.id !== id);
+            saveTripToCloud();
+            showToast('已刪除', 'info');
+        };
+
+        window.handleAddExpense = function(e) {
+            e.preventDefault();
+            const title = document.getElementById('expense-title').value;
+            const amount = Number(document.getElementById('expense-amount').value);
+            const date = document.getElementById('expense-date').value;
+            const payer = document.getElementById('expense-payer').value;
+            const cat = document.getElementById('expense-category').value;
+            currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat });
+            saveTripToCloud();
+            closeModal('add-expense-modal');
+            showToast('記帳成功', 'success');
+        };
+
+        window.deleteExpenseItem = function(id) {
+            currentTripData.expenses = currentTripData.expenses.filter(e => e.id !== id);
+            saveTripToCloud();
+            showToast('已刪除', 'info');
+        };
+
+        window.loadProjectList = async function() {
+            const container = document.getElementById('projects-list-container');
+            if (!container) return;
+            container.innerHTML = '<p class="text-slate-400 text-center py-2">載入雲端專案中...</p>';
+            
+            let pIds = [currentTripId];
+            try {
+                if (db && auth && auth.currentUser) {
+                    const uId = auth.currentUser.uid;
+                    const colRef = collection(db, 'artifacts', appId, 'users', uId, 'trips');
+                    const snap = await getDocs(colRef);
+                    snap.forEach(d => { if (!pIds.includes(d.id)) pIds.push(d.id); });
+                }
+            } catch(e) {}
+
+            container.innerHTML = '';
+            pIds.forEach(id => {
+                let t = id;
+                try {
+                    const s = localStorage.getItem('local_trip_' + id);
+                    if (s) t = JSON.parse(s).title;
+                } catch(e){}
+                const div = document.createElement('div');
+                div.className = `p-2.5 rounded-xl border flex justify-between items-center ${id === currentTripId ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`;
+                div.innerHTML = `<span class="font-bold cursor-pointer flex-1 text-slate-800" onclick="window.switchTrip('${id}')">${t}</span>`;
+                container.appendChild(div);
+            });
+        };
+
+        window.switchTrip = async function(id) {
+            await loadTripFromCloud(id);
+            closeModal('project-modal');
+            showToast('已切換專案', 'info');
+        };
+
+        window.switchAuthTab = function(tab) {
+            const loginForm = document.getElementById('auth-login-form');
+            const regForm = document.getElementById('auth-register-form');
+            const btnLogin = document.getElementById('tab-login-btn');
+            const btnReg = document.getElementById('tab-register-btn');
+            if (loginForm) loginForm.classList.toggle('hidden', tab !== 'login');
+            if (regForm) regForm.classList.toggle('hidden', tab !== 'register');
+            if (btnLogin) btnLogin.className = tab === 'login' ? 'flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center' : 'flex-1 pb-1.5 font-bold text-slate-400 text-center';
+            if (btnReg) btnReg.className = tab === 'register' ? 'flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center' : 'flex-1 pb-1.5 font-bold text-slate-400 text-center';
+        };
+
+        window.handleUserRegister = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+                closeModal('auth-modal');
+                showToast('註冊並登入成功', 'success');
+            } catch(err) {
+                showToast('註冊失敗: ' + err.message, 'error');
+            }
+        };
+
+        window.handleUserLogin = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                closeModal('auth-modal');
+                showToast('登入成功', 'success');
+            } catch(err) {
+                showToast('登入失敗: ' + err.message, 'error');
+            }
+        };
+
+        window.handleUserLogout = async function() {
+            try {
+                await signOut(auth);
+                await signInAnonymously(auth);
+                closeModal('auth-modal');
+                showToast('已登出雲端', 'info');
+            } catch(e) {}
+        };
+
+        window.exportTripJSON = function() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentTripData, null, 2));
+            const dl = document.createElement('a');
+            dl.setAttribute("href", dataStr);
+            dl.setAttribute("download", `${currentTripData.title}.json`);
+            dl.click(); dl.remove();
+            showToast('已匯出備份', 'success');
+        };
+
+        window.openModal = function(id) {
+            if (id === 'edit-trip-modal') {
+                document.getElementById('input-trip-title').value = currentTripData.title;
+                document.getElementById('input-trip-start').value = currentTripData.startDate;
+                document.getElementById('input-trip-end').value = currentTripData.endDate;
+                document.getElementById('input-trip-destination').value = currentTripData.destination;
+                document.getElementById('input-trip-budget').value = currentTripData.budget;
+                document.getElementById('input-trip-members').value = currentTripData.members;
+                document.getElementById('input-trip-cover').value = currentTripData.coverPhoto;
+                document.getElementById('input-trip-notes').value = currentTripData.notes;
+                switchEditCoverMode('url');
+            }
+            if (id === 'new-project-modal') {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('new-trip-start').value = today;
+                document.getElementById('new-trip-end').value = today;
+                switchNewCoverMode('url');
+            }
+            if (id === 'add-expense-modal') {
+                document.getElementById('expense-date').value = currentTripData.startDate;
+            }
+            if (id === 'auth-modal') {
+                const loggedPanel = document.getElementById('auth-logged-in-panel');
+                const loginForm = document.getElementById('auth-login-form');
+                const tabHeaders = document.getElementById('auth-tab-headers');
+                const isAuthed = auth && auth.currentUser && !auth.currentUser.isAnonymous;
+                if (loggedPanel) loggedPanel.classList.toggle('hidden', !isAuthed);
+                if (loginForm) loginForm.classList.toggle('hidden', isAuthed);
+                if (tabHeaders) tabHeaders.classList.toggle('hidden', isAuthed);
+                if (isAuthed) {
+                    setElText('logged-user-display', auth.currentUser.email);
+                }
+            }
+            if (id === 'project-modal') loadProjectList();
+            const modalEl = document.getElementById(id);
+            if (modalEl) modalEl.classList.remove('hidden');
+        };
+
+        window.closeModal = function(id) {
+            const modalEl = document.getElementById(id);
+            if (modalEl) modalEl.classList.add('hidden');
+        };
+
+        window.copyToClipboard = function(text) {
+            const el = document.createElement('textarea');
+            el.value = text; document.body.appendChild(el); el.select();
+            try { document.execCommand('copy'); showToast('已複製', 'success'); } catch(e){}
+            el.remove();
+        };
+
+        function showToast(msg, type = 'info') {
+            const c = document.getElementById('toast-container');
+            if (!c) return;
+            const t = document.createElement('div');
+            t.className = `${type === 'success' ? 'bg-emerald-600' : 'bg-slate-900'} text-white text-xs px-3 py-2 rounded-xl shadow-lg`;
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => t.remove(), 2200);
+        }
+    </script>
+</body>
+</html>

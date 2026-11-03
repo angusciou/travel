@@ -117,7 +117,7 @@
         <div class="flex-1 flex flex-col pb-4">
             
             <!-- 0. 迎賓首頁 (Landing Page) -->
-            <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');" id="home-bg-container">
+            <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');">
                 <div class="absolute top-3 right-3 z-10 flex gap-1.5">
                     <button onclick="openModal('edit-home-bg-modal')" class="bg-black/40 hover:bg-black/60 text-white text-[10px] px-2.5 py-1 rounded-lg backdrop-blur-xs transition flex items-center gap-1 shadow-xs">
                         <i class="fa-solid fa-image"></i> 自訂背景
@@ -257,7 +257,7 @@
 
                 <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
                     <div class="flex items-center justify-between px-1">
-                        <span class="text-[11px] font-bold text-slate-700"><i class="fa-solid fa-map text-amber-500 mr-1"></i> 景點地圖檢視 (繁體中文)</span>
+                        <span class="text-[11px] font-bold text-slate-700"><i class="fa-solid fa-map text-amber-500 mr-1"></i> 景點地圖檢視 (Esri)</span>
                     </div>
                     <div id="leaflet-map-container" class="w-full h-48 rounded-lg overflow-hidden border border-slate-200 bg-slate-100"></div>
                 </div>
@@ -540,7 +540,7 @@
         </div>
     </div>
 
-    <!-- 5. 專案庫與新建專案 -->
+    <!-- 5. 專案庫與管理 -->
     <div id="project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('project-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
@@ -594,7 +594,7 @@
                 <p class="font-bold">💡 雲端同步設定步驟：</p>
                 <p>1. 開啟 <a href="https://supabase.com" target="_blank" class="underline font-bold">Supabase</a> 建立新專案。</p>
                 <p>2. 至 SQL Editor 執行 `supabase-schema.sql`。</p>
-                <p>3. 複製專案 URL 與金鑰填入下方（或建立 `config.js`）。</p>
+                <p>3. 複製專案 URL 與金鑰填入下方。</p>
             </div>
 
             <div id="supabase-config-panel" class="space-y-2 border-b pb-3">
@@ -647,7 +647,6 @@
         let leafletMap = null;
         let mapMarkersLayer = null;
         let chartType = 'pie';
-        let expenseCanvasCtx = null;
         let expenseChartInstance = null;
 
         const PRESET_CATEGORIES = {
@@ -679,9 +678,7 @@
                 try {
                     supabaseClient = window.supabase.createClient(url, key);
                     checkSupabaseAuth();
-                } catch(e) {
-                    console.warn("Supabase init error:", e);
-                }
+                } catch(e) {}
             }
         }
 
@@ -956,24 +953,48 @@
                 }
                 filtered.forEach(t => {
                     const div = document.createElement('div');
-                    div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between cursor-pointer hover:border-amber-400 transition';
-                    div.onclick = async () => {
-                        await loadTripFromCloud(t.id);
-                        goToPage(1);
-                    };
+                    div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between hover:border-amber-400 transition';
                     div.innerHTML = `
-                        <div class="flex items-center gap-3 min-w-0">
+                        <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onclick="openTripById('${t.id}')">
                             <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
                             <div class="min-w-0">
                                 <h4 class="font-bold text-slate-800 text-xs truncate">${t.title}</h4>
                                 <p class="text-[10px] text-slate-500 truncate">${t.startDate || ''} ~ ${t.endDate || ''} | ${t.destination || ''}</p>
                             </div>
                         </div>
-                        <i class="fa-solid fa-chevron-right text-xs text-slate-400 flex-shrink-0 ml-2"></i>
+                        <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                            <button onclick="openTripById('${t.id}')" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2.5 py-1 rounded-lg font-bold">開啟</button>
+                            <button onclick="deleteTripProject(event, '${t.id}')" class="text-slate-400 hover:text-red-500 p-1.5" title="刪除專案"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
                     `;
                     container.appendChild(div);
                 });
             }
+        };
+
+        window.openTripById = async function(id) {
+            await loadTripFromCloud(id);
+            goToPage(1);
+        };
+
+        window.deleteTripProject = async function(event, id) {
+            event.stopPropagation();
+            if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
+
+            // 從本機移除
+            localStorage.removeItem('local_trip_' + id);
+            
+            // 從 Supabase 移除
+            try {
+                if (supabaseClient && currentUser) {
+                    await supabaseClient.from('trips').delete().eq('id', id);
+                }
+            } catch(e) {}
+
+            showToast('專案已刪除', 'info');
+            // 重新整理目前的類別檢視
+            const activeCat = document.getElementById('category-title-display').innerText.includes('進行') ? 'active' : 'past';
+            openLandingCategory(activeCat);
         };
 
         window.goToPage = function(page) {
@@ -1041,8 +1062,6 @@
                 renderChecklist();
                 renderSummarySheet();
                 updateLeafletMapMarkers();
-                const shareKeyEl = document.getElementById('share-key-display');
-                if (shareKeyEl) shareKeyEl.value = currentTripId;
             } catch(e) {}
         }
 
@@ -1140,7 +1159,7 @@
                 leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([35.0116, 135.7681], 12);
                 L.control.zoom({ position: 'topright' }).addTo(leafletMap);
                 
-                // 更換為完全無阻擋、免金鑰且全球通用的 Esri World Street Map 圖資來源
+                // Esri World Street Map 圖資來源
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
                     maxZoom: 19,
                     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
@@ -1253,8 +1272,7 @@
             if (!container) return;
             container.innerHTML = '';
 
-            // 計算誰幫誰付了多少錢 (Net balances)
-            let balances = {}; // balances[debtor][creditor] = amount
+            let balances = {};
             
             expenses.forEach(ex => {
                 const payer = ex.payer;
@@ -1265,7 +1283,6 @@
                 if (!payer || parts.length === 0) return;
 
                 if (mode === 'payer_excluded') {
-                    // 僅分攤人還款給付款人
                     const perShare = amount / parts.length;
                     parts.forEach(p => {
                         if (p !== payer) {
@@ -1274,7 +1291,6 @@
                         }
                     });
                 } else {
-                    // 均分模式 (包含付款人自身在內)
                     const totalParts = parts.includes(payer) ? parts.length : parts.length + 1;
                     const perShare = amount / totalParts;
                     const allP = parts.includes(payer) ? parts : [...parts, payer];
@@ -1288,7 +1304,6 @@
                 }
             });
 
-            // 整理並簡化債務
             let list = [];
             Object.keys(balances).forEach(debtor => {
                 Object.keys(balances[debtor]).forEach(creditor => {
@@ -1757,13 +1772,6 @@
         window.closeModal = function(id) {
             const modalEl = document.getElementById(id);
             if (modalEl) modalEl.classList.add('hidden');
-        };
-
-        window.copyToClipboard = function(text) {
-            const el = document.createElement('textarea');
-            el.value = text; document.body.appendChild(el); el.select();
-            try { document.execCommand('copy'); showToast('已複製', 'success'); } catch(e){}
-            el.remove();
         };
 
         function showToast(msg, type = 'info') {

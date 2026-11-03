@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅書 TravelBook - Supabase 雲端同步版</title>
+    <title>旅書 TravelBook - Supabase 雲端共編版</title>
     <meta name="theme-color" content="#d97706">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,7 +13,7 @@
     <script>
         try {
             const manifestData = {
-                "name": "旅書 TravelBook Supabase版",
+                "name": "旅書 TravelBook 共編版",
                 "short_name": "旅書",
                 "start_url": "./index.html",
                 "display": "standalone",
@@ -64,11 +64,13 @@
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- 讀取選配的外部 config.js -->
+    <!-- 內建雲端金鑰，直接寫入免設定 -->
     <script>
-        window.SUPABASE_CONFIG = { url: '', key: '' };
+        window.SUPABASE_CONFIG = { 
+            url: 'https://rmcnbbvtcbgbbjdstejh.supabase.co', 
+            key: 'sb_publishable_5LUbWLvqIvSss0U-SHP_Tw_cA2KEMe3' 
+        };
     </script>
-    <script src="./config.js" onerror="console.log('未偵測到 config.js，將使用內建或手動設定')"></script>
 
     <style>
         body { 
@@ -87,9 +89,9 @@
 <body class="h-full bg-slate-50 text-slate-800 flex flex-col justify-between overflow-x-hidden">
     
     <!-- 頂部導航列 -->
-    <header class="relative z-30 bg-white border-b border-slate-200 px-3 py-2.5 text-slate-800 flex items-center justify-between shadow-xs flex-shrink-0">
+    <header class="relative z-30 bg-white border-b border-slate-200 px-3 py-2.5 text-slate-800 flex items-center justify-between shadow-sm flex-shrink-0">
         <div class="flex items-center space-x-2 min-w-0 cursor-pointer" onclick="goHomeLanding()">
-            <div class="bg-amber-500 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
+            <div class="bg-amber-500 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
                 <i class="fa-solid fa-book-open"></i>
             </div>
             <div class="min-w-0">
@@ -99,7 +101,7 @@
         </div>
 
         <div class="flex items-center gap-1.5 flex-shrink-0 text-xs">
-            <button onclick="installAppPrompt()" id="install-btn" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-xs text-[10px]">
+            <button onclick="installAppPrompt()" id="install-btn" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-sm text-[10px]">
                 <i class="fa-solid fa-download"></i> 安裝
             </button>
             <button onclick="goHomeLanding()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg border border-slate-200 font-bold" title="首頁">
@@ -119,7 +121,7 @@
             <!-- 0. 迎賓首頁 (Landing Page) -->
             <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');">
                 <div class="absolute top-3 right-3 z-10 flex gap-1.5">
-                    <button onclick="openModal('edit-home-bg-modal')" class="bg-black/40 hover:bg-black/60 text-white text-[10px] px-2.5 py-1 rounded-lg backdrop-blur-xs transition flex items-center gap-1 shadow-xs">
+                    <button onclick="openModal('edit-home-bg-modal')" class="bg-black/40 hover:bg-black/60 text-white text-[10px] px-2.5 py-1 rounded-lg backdrop-blur-sm transition flex items-center gap-1 shadow-sm">
                         <i class="fa-solid fa-image"></i> 自訂背景
                     </button>
                 </div>
@@ -149,7 +151,7 @@
                     </div>
 
                     <!-- 2. 創造回憶 -->
-                    <div onclick="openLandingCategory('active')" class="bg-white/95 backdrop-blur-xs border border-white/20 p-4 rounded-2xl shadow-xs cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
+                    <div onclick="openLandingCategory('active')" class="bg-white/95 backdrop-blur-sm border border-white/20 p-4 rounded-2xl shadow-sm cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
                                 <i class="fa-solid fa-plane-departure"></i>
@@ -163,7 +165,7 @@
                     </div>
 
                     <!-- 3. 回憶過去 -->
-                    <div onclick="openLandingCategory('past')" class="bg-white/95 backdrop-blur-xs border border-white/20 p-4 rounded-2xl shadow-xs cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
+                    <div onclick="openLandingCategory('past')" class="bg-white/95 backdrop-blur-sm border border-white/20 p-4 rounded-2xl shadow-sm cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-lg">
                                 <i class="fa-solid fa-box-archive"></i>
@@ -206,35 +208,44 @@
                             <h2 id="cover-trip-title" class="text-base font-bold mt-1 text-white">載入中...</h2>
                         </div>
                     </div>
-                    <button onclick="openModal('edit-trip-modal')" class="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-xs">
+                    <button onclick="openModal('edit-trip-modal')" class="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-sm">
                         <i class="fa-solid fa-pen"></i> 編輯封面
                     </button>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
-                    <div onclick="openModal('edit-trip-modal')" class="bg-amber-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-amber-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-amber-50/85 backdrop-blur-sm p-2.5 rounded-xl border border-amber-200 text-center cursor-pointer active:scale-95 transition shadow-sm">
                         <i class="fa-regular fa-calendar-days text-amber-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">日期時間 (點擊編輯)</p>
                         <p id="cover-dates" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-sky-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-sky-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-sky-50/85 backdrop-blur-sm p-2.5 rounded-xl border border-sky-200 text-center cursor-pointer active:scale-95 transition shadow-sm">
                         <i class="fa-solid fa-location-dot text-sky-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">主要目的地 (點擊編輯)</p>
                         <p id="cover-destination" class="text-xs font-bold text-slate-800 mt-0.5 truncate">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-emerald-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-emerald-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-emerald-50/85 backdrop-blur-sm p-2.5 rounded-xl border border-emerald-200 text-center cursor-pointer active:scale-95 transition shadow-sm">
                         <i class="fa-solid fa-coins text-emerald-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">預算預估 (點擊編輯)</p>
                         <p id="cover-budget" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-purple-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-purple-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-purple-50/85 backdrop-blur-sm p-2.5 rounded-xl border border-purple-200 text-center cursor-pointer active:scale-95 transition shadow-sm">
                         <i class="fa-solid fa-users text-purple-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">同行夥伴 (點擊編輯)</p>
                         <p id="cover-members" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
                     </div>
                 </div>
 
-                <div onclick="openModal('edit-trip-modal')" class="bg-white p-3 rounded-xl border border-slate-200 cursor-pointer shadow-2xs">
+                <!-- 共編設定區塊摘要 -->
+                <div onclick="openModal('edit-trip-modal')" class="bg-indigo-50/80 p-3 rounded-xl border border-indigo-200 cursor-pointer shadow-sm flex items-center justify-between text-xs">
+                    <div>
+                        <h4 class="font-bold text-indigo-900 flex items-center gap-1.5"><i class="fa-solid fa-user-gear"></i> 雲端共編授權名單</h4>
+                        <p id="cover-collaborators" class="text-indigo-700 text-[11px] mt-0.5 truncate">無設定額外共編帳號</p>
+                    </div>
+                    <span class="text-indigo-600 text-[11px] font-bold underline">設定</span>
+                </div>
+
+                <div onclick="openModal('edit-trip-modal')" class="bg-white p-3 rounded-xl border border-slate-200 cursor-pointer shadow-sm">
                     <h3 class="text-[11px] font-bold text-slate-600 mb-1"><i class="fa-solid fa-quote-left mr-1 text-amber-500"></i> 旅遊備忘 / 旅程前言 (點擊編輯)</h3>
                     <p id="cover-notes" class="text-xs text-slate-700 leading-relaxed">點擊此處編輯旅程備忘...</p>
                 </div>
@@ -242,7 +253,7 @@
 
             <!-- 第 2 頁：每日行程與地圖 -->
             <div id="page-2" class="space-y-3 page-panel hidden">
-                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                     <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                         <i class="fa-solid fa-map-location-dot text-amber-600"></i> 行程明細
                     </h2>
@@ -255,7 +266,7 @@
 
                 <div id="day-tabs-container" class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"></div>
 
-                <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm space-y-1.5">
                     <div class="flex items-center justify-between px-1">
                         <span class="text-[11px] font-bold text-slate-700"><i class="fa-solid fa-map text-amber-500 mr-1"></i> 景點地圖檢視 (Esri)</span>
                     </div>
@@ -267,7 +278,7 @@
 
             <!-- 第 3 頁：花費統計與分帳 -->
             <div id="page-3" class="space-y-3 page-panel hidden">
-                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                     <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                         <i class="fa-solid fa-receipt text-emerald-600"></i> 花費記帳與智慧分帳
                     </h2>
@@ -289,21 +300,21 @@
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">
-                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-sm">
                         <p class="text-[9px] text-slate-500">總支出</p>
                         <p id="total-spent-display" class="text-xs font-bold text-slate-800 mt-0.5">NT$ 0</p>
                     </div>
-                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-sm">
                         <p class="text-[9px] text-slate-500">剩餘預算</p>
                         <p id="remaining-budget-display" class="text-xs font-bold text-emerald-600 mt-0.5">NT$ 0</p>
                     </div>
-                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
+                    <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-sm">
                         <p class="text-[9px] text-slate-500">人均分攤</p>
                         <p id="per-person-display" class="text-xs font-bold text-sky-600 mt-0.5">NT$ 0</p>
                     </div>
                 </div>
 
-                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     <h4 class="text-xs font-bold text-slate-700 flex items-center justify-between">
                         <span class="flex items-center gap-1"><i class="fa-solid fa-scale-balanced text-amber-600"></i> 智慧結算建議與還款確認</span>
                         <span class="text-[9px] text-slate-400 font-normal">勾選代表已結清轉帳</span>
@@ -311,7 +322,7 @@
                     <div id="settlement-container" class="space-y-1.5 text-[11px]"></div>
                 </div>
 
-                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex justify-between items-center">
                         <h4 class="text-xs font-bold text-slate-700">分類支出佔比</h4>
                         <div class="flex gap-1">
@@ -325,7 +336,7 @@
                     <div id="expense-bar-chart" class="space-y-1.5 text-[11px] pt-2"></div>
                 </div>
 
-                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                     <h4 class="text-xs font-bold text-slate-700 mb-2">支出明細紀錄</h4>
                     <div id="expense-list-container" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
                 </div>
@@ -333,7 +344,7 @@
 
             <!-- 第 4 頁：行李清單 -->
             <div id="page-4" class="space-y-3 page-panel hidden">
-                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                     <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                         <i class="fa-solid fa-clipboard-check text-indigo-600"></i> 行李清單
                     </h2>
@@ -342,7 +353,7 @@
                     </button>
                 </div>
 
-                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                     <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
                         <span>打包進度</span>
                         <span id="checklist-progress-text">0 / 0 (0%)</span>
@@ -357,14 +368,14 @@
 
             <!-- 第 5 頁：匯出與總覽 -->
             <div id="page-5" class="space-y-3 page-panel hidden">
-                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3 text-xs">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 text-xs">
                     <h2 class="text-sm font-bold text-slate-900 border-b pb-2"><i class="fa-solid fa-cloud-arrow-down mr-1 text-slate-700"></i> 雲端與匯出總覽</h2>
                     <div>
                         <h3 id="summary-trip-title" class="font-bold text-slate-800 text-sm">載入中...</h3>
                         <p id="summary-trip-info" class="text-slate-500 text-[11px] mt-0.5">日期與花費摘要</p>
                     </div>
                     <div class="flex gap-2 pt-2">
-                        <button onclick="window.print()" class="flex-1 bg-slate-900 text-white py-2 rounded-lg font-medium shadow-2xs"><i class="fa-solid fa-file-pdf mr-1"></i> 列印 PDF</button>
+                        <button onclick="window.print()" class="flex-1 bg-slate-900 text-white py-2 rounded-lg font-medium shadow-sm"><i class="fa-solid fa-file-pdf mr-1"></i> 列印 PDF</button>
                         <button onclick="exportTripJSON()" class="flex-1 bg-slate-100 text-slate-800 py-2 rounded-lg font-medium border"><i class="fa-solid fa-download mr-1"></i> 備份 JSON</button>
                     </div>
                 </div>
@@ -395,7 +406,7 @@
     <!-- 彈窗群組 -->
 
     <!-- 0-1. 自訂迎賓頁背景 -->
-    <div id="edit-home-bg-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="edit-home-bg-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs space-y-3">
             <button onclick="closeModal('edit-home-bg-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="font-bold text-slate-900 text-sm"><i class="fa-solid fa-image text-amber-500 mr-1"></i> 自訂迎賓頁背景圖</h3>
@@ -418,16 +429,16 @@
 
             <div class="flex gap-2 pt-2">
                 <button onclick="resetHomeBackground()" class="flex-1 bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg">恢復預設</button>
-                <button onclick="saveHomeBackground()" class="flex-1 bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">套用背景</button>
+                <button onclick="saveHomeBackground()" class="flex-1 bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">套用背景</button>
             </div>
         </div>
     </div>
 
-    <!-- 1. 編輯專案 -->
-    <div id="edit-trip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <!-- 1. 編輯專案與共編設定 -->
+    <div id="edit-trip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative max-h-[85vh] overflow-y-auto text-xs">
             <button onclick="closeModal('edit-trip-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-3 text-sm">編輯旅書資訊</h3>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">編輯旅書資訊與共編設定</h3>
             <form onsubmit="handleSaveTripDetails(event)" class="space-y-2.5">
                 <div><label class="block font-bold text-slate-700 mb-1">行程名稱</label><input type="text" id="input-trip-title" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div class="grid grid-cols-2 gap-2">
@@ -439,6 +450,14 @@
                     <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="input-trip-budget" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="input-trip-members" min="1" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                
+                <!-- 帳號共編授權設定 -->
+                <div class="bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-200 space-y-1">
+                    <label class="block font-bold text-indigo-900"><i class="fa-solid fa-user-gear mr-1"></i> 共編授權帳號 (Email)</label>
+                    <p class="text-[10px] text-indigo-700">輸入其他已註冊使用者的 Email（多個帳號請用逗號隔開），賦予其同步編輯此專案的權限。</p>
+                    <input type="text" id="input-trip-collaborators" placeholder="user1@example.com, user2@example.com" class="w-full border border-indigo-200 rounded p-1.5 bg-white outline-none">
+                </div>
+
                 <div>
                     <label class="block font-bold text-slate-700 mb-1">封面圖片來源</label>
                     <div class="flex gap-2 mb-1.5">
@@ -452,13 +471,13 @@
                     </div>
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">旅遊備忘</label><textarea id="input-trip-notes" rows="2" class="w-full border border-slate-200 rounded p-1.5 outline-none"></textarea></div>
-                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">儲存並同步雲端</button>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">儲存並同步雲端共編</button>
             </form>
         </div>
     </div>
 
     <!-- 2. 新增行程活動 -->
-    <div id="add-event-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="add-event-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('add-event-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="font-bold text-slate-900 mb-3 text-sm">新增行程項目</h3>
@@ -478,13 +497,13 @@
                     </div>
                     <div><label class="block font-bold text-slate-700 mb-1">花費 (TWD)</label><input type="number" id="event-cost" value="0" min="0" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
-                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">確認新增</button>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">確認新增</button>
             </form>
         </div>
     </div>
 
     <!-- 3. 新增記帳 -->
-    <div id="add-expense-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="add-expense-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('add-expense-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="font-bold text-slate-900 mb-3 text-sm">新增記帳品項與彈性分帳</h3>
@@ -514,13 +533,13 @@
                     <label class="block font-bold text-slate-700 mb-1">參與分攤成員 (以逗號分隔)</label>
                     <input type="text" id="expense-participants" value="小明, 小華, 小美" required class="w-full border border-slate-200 rounded p-1.5 outline-none" placeholder="小華, 小美">
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-2xs">記錄支出並計算分帳</button>
+                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-sm">記錄支出並計算分帳</button>
             </form>
         </div>
     </div>
 
     <!-- 4. Excel 匯入 -->
-    <div id="excel-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="excel-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('excel-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="font-bold text-slate-900 mb-2 text-sm"><i class="fa-solid fa-file-excel text-emerald-600 mr-1"></i> 匯入 Excel 行程</h3>
@@ -535,23 +554,23 @@
             </div>
             <div class="flex gap-2">
                 <button onclick="downloadExcelTemplate()" class="flex-1 bg-slate-100 text-slate-800 py-2 rounded font-medium">下載範本</button>
-                <button id="excel-confirm-btn" onclick="applyExcelDataToItinerary()" disabled class="flex-1 bg-emerald-600 disabled:opacity-40 text-white py-2 rounded font-medium shadow-2xs">確認匯入</button>
+                <button id="excel-confirm-btn" onclick="applyExcelDataToItinerary()" disabled class="flex-1 bg-emerald-600 disabled:opacity-40 text-white py-2 rounded font-medium shadow-sm">確認匯入</button>
             </div>
         </div>
     </div>
 
     <!-- 5. 專案庫與管理 -->
-    <div id="project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('project-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-3 text-sm"><i class="fa-solid fa-folder-open text-amber-500 mr-1"></i> 我的雲端專案庫</h3>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm"><i class="fa-solid fa-folder-open text-amber-500 mr-1"></i> 我的雲端專案庫 (含共編)</h3>
             <div id="projects-list-container" class="space-y-1.5 max-h-40 overflow-y-auto mb-3"></div>
-            <button onclick="openModal('new-project-modal'); closeModal('project-modal');" class="w-full bg-amber-600 text-white py-2 rounded-lg font-semibold shadow-2xs">建立新專案</button>
+            <button onclick="openModal('new-project-modal'); closeModal('project-modal');" class="w-full bg-amber-600 text-white py-2 rounded-lg font-semibold shadow-sm">建立新專案</button>
         </div>
     </div>
 
     <!-- 建立全新旅遊專案視窗 -->
-    <div id="new-project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="new-project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative max-h-[85vh] overflow-y-auto text-xs">
             <button onclick="closeModal('new-project-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
             <h3 class="font-bold text-slate-900 mb-3 text-sm">建立全新雲端旅遊專案</h3>
@@ -579,30 +598,17 @@
                     </div>
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">旅遊備忘</label><textarea id="new-trip-notes" rows="2" placeholder="寫下旅程期待..." class="w-full border border-slate-200 rounded p-1.5 outline-none"></textarea></div>
-                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">建立並同步雲端</button>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">建立並同步雲端</button>
             </form>
         </div>
     </div>
 
     <!-- 6. Supabase 帳號與雲端同步設定 -->
-    <div id="auth-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+    <div id="auth-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-xs w-full p-4 shadow-xl relative text-xs space-y-3">
             <button onclick="closeModal('auth-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 text-sm"><i class="fa-solid fa-cloud text-amber-500 mr-1"></i> Supabase 雲端資料庫設定</h3>
+            <h3 class="font-bold text-slate-900 text-sm"><i class="fa-solid fa-cloud text-amber-500 mr-1"></i> Supabase 雲端共編帳號</h3>
             
-            <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-[10px] text-amber-900 space-y-1">
-                <p class="font-bold">💡 雲端同步設定步驟：</p>
-                <p>1. 開啟 <a href="https://supabase.com" target="_blank" class="underline font-bold">Supabase</a> 建立新專案。</p>
-                <p>2. 至 SQL Editor 執行 `supabase-schema.sql`。</p>
-                <p>3. 複製專案 URL 與金鑰填入下方。</p>
-            </div>
-
-            <div id="supabase-config-panel" class="space-y-2 border-b pb-3">
-                <div><label class="block font-bold text-slate-700 mb-0.5">Supabase URL</label><input type="text" id="sb-url-input" placeholder="https://xxx.supabase.co" class="w-full border rounded p-1.5 outline-none font-mono text-[10px]"></div>
-                <div><label class="block font-bold text-slate-700 mb-0.5">Supabase Anon Key</label><input type="password" id="sb-key-input" placeholder="eyJhbGciOi..." class="w-full border rounded p-1.5 outline-none font-mono text-[10px]"></div>
-                <button onclick="saveSupabaseConfig()" class="w-full bg-slate-800 text-white font-semibold py-1.5 rounded">儲存連線設定</button>
-            </div>
-
             <div class="flex border-b border-slate-200 mb-2" id="auth-tab-headers">
                 <button onclick="switchAuthTab('login')" id="tab-login-btn" class="flex-1 pb-1 font-bold text-amber-600 border-b-2 border-amber-600 text-center">登入</button>
                 <button onclick="switchAuthTab('register')" id="tab-register-btn" class="flex-1 pb-1 font-bold text-slate-400 text-center">註冊</button>
@@ -625,7 +631,7 @@
                     <p class="text-slate-500 text-[10px]">已連線雲端帳號：</p>
                     <p class="font-bold text-emerald-800 text-xs truncate" id="logged-user-display"></p>
                 </div>
-                <button onclick="handleUserLogout()" class="w-full bg-slate-100 text-slate-700 font-semibold py-1.5 rounded">登出</button>
+                <button onclick="handleUserLogout()" class="w-full bg-slate-100 text-slate-700 font-semibold py-1.5 rounded">登入其他帳號</button>
             </div>
         </div>
     </div>
@@ -681,20 +687,6 @@
                 } catch(e) {}
             }
         }
-
-        window.saveSupabaseConfig = function() {
-            const url = document.getElementById('sb-url-input').value.trim();
-            const key = document.getElementById('sb-key-input').value.trim();
-            if (!url || !key) {
-                showToast('請填寫完整的 URL 與 Key', 'error');
-                return;
-            }
-            localStorage.setItem('sb_url', url);
-            localStorage.setItem('sb_key', key);
-            initSupabaseFromStorage();
-            showToast('Supabase 設定儲存成功', 'success');
-            closeModal('auth-modal');
-        };
 
         async function checkSupabaseAuth() {
             if (!supabaseClient) return;
@@ -753,6 +745,7 @@
                 destination: '日本 京都・大阪',
                 budget: 45000,
                 members: 3,
+                collaborators: [], // 共編授權 Email 清單
                 coverPhoto: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
                 notes: '準備迎向一趟輕鬆愉快的賞楓古都之旅。',
                 itinerary: [
@@ -782,7 +775,7 @@
                         data: currentTripData,
                         updated_at: new Date()
                     });
-                    showToast('已同步至 Supabase 雲端', 'success');
+                    showToast('已同步至 Supabase 雲端共編', 'success');
                 }
             } catch (e) {
                 showToast('已儲存至本機', 'info');
@@ -900,9 +893,19 @@
             }
             try {
                 if (supabaseClient && currentUser) {
-                    const { data } = await supabaseClient.from('trips').select('id, data').eq('user_id', currentUser.id);
+                    // 取得自己建立的，或是 collaborators 中包含自己 Email 的共編專案
+                    const { data } = await supabaseClient.from('trips').select('id, data');
                     if (data) {
-                        data.forEach(d => { if (d.data) mapTrips[d.id] = d.data; });
+                        data.forEach(d => { 
+                            if (d.data) {
+                                const dat = d.data;
+                                const isOwner = (d.user_id === currentUser.id);
+                                const isCollab = (dat.collaborators || []).includes(currentUser.email);
+                                if (isOwner || isCollab) {
+                                    mapTrips[dat.id] = dat;
+                                }
+                            }
+                        });
                     }
                 }
             } catch(e){}
@@ -952,13 +955,14 @@
                     return;
                 }
                 filtered.forEach(t => {
+                    const collabTag = (t.collaborators && t.collaborators.length > 0) ? `<span class="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-bold mr-1"><i class="fa-solid fa-users"></i> 共編</span>` : '';
                     const div = document.createElement('div');
-                    div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between hover:border-amber-400 transition';
+                    div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-amber-400 transition';
                     div.innerHTML = `
                         <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onclick="openTripById('${t.id}')">
                             <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
                             <div class="min-w-0">
-                                <h4 class="font-bold text-slate-800 text-xs truncate">${t.title}</h4>
+                                <h4 class="font-bold text-slate-800 text-xs truncate">${collabTag}${t.title}</h4>
                                 <p class="text-[10px] text-slate-500 truncate">${t.startDate || ''} ~ ${t.endDate || ''} | ${t.destination || ''}</p>
                             </div>
                         </div>
@@ -981,10 +985,8 @@
             event.stopPropagation();
             if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
 
-            // 從本機移除
             localStorage.removeItem('local_trip_' + id);
             
-            // 從 Supabase 移除
             try {
                 if (supabaseClient && currentUser) {
                     await supabaseClient.from('trips').delete().eq('id', id);
@@ -992,7 +994,6 @@
             } catch(e) {}
 
             showToast('專案已刪除', 'info');
-            // 重新整理目前的類別檢視
             const activeCat = document.getElementById('category-title-display').innerText.includes('進行') ? 'active' : 'past';
             openLandingCategory(activeCat);
         };
@@ -1050,6 +1051,9 @@
                 setElText('cover-members', (currentTripData.members || 1) + ' 人');
                 setElText('cover-notes', currentTripData.notes || '暫無備忘');
                 
+                const collabList = currentTripData.collaborators || [];
+                setElText('cover-collaborators', collabList.length > 0 ? collabList.join(', ') : '無設定額外共編帳號');
+
                 const coverImg = document.getElementById('cover-photo');
                 if (coverImg && currentTripData.coverPhoto) {
                     coverImg.src = currentTripData.coverPhoto;
@@ -1094,7 +1098,7 @@
 
             for (let i = 1; i <= diffDays; i++) {
                 const btn = document.createElement('button');
-                btn.className = `px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shadow-2xs ${
+                btn.className = `px-3 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shadow-sm ${
                     activeDayTab === i ? 'bg-amber-500 text-white' : 'bg-white text-slate-600 border border-slate-200'
                 }`;
                 btn.innerText = `Day ${i}`;
@@ -1121,7 +1125,7 @@
 
             dayEvents.sort((a,b) => (a.time || '').localeCompare(b.time || '')).forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-start justify-between gap-2 text-xs';
+                div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between gap-2 text-xs';
                 div.innerHTML = `
                     <div class="flex items-start gap-2 flex-1 min-w-0">
                         <span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">${index + 1}</span>
@@ -1159,7 +1163,6 @@
                 leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([35.0116, 135.7681], 12);
                 L.control.zoom({ position: 'topright' }).addTo(leafletMap);
                 
-                // Esri World Street Map 圖資來源
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
                     maxZoom: 19,
                     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
@@ -1432,7 +1435,7 @@
 
             list.forEach(item => {
                 const div = document.createElement('div');
-                div.className = `p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs shadow-2xs ${item.done ? 'bg-emerald-50/50 text-slate-400 line-through' : 'bg-white text-slate-800'}`;
+                div.className = `p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs shadow-sm ${item.done ? 'bg-emerald-50/50 text-slate-400 line-through' : 'bg-white text-slate-800'}`;
                 div.onclick = () => { item.done = !item.done; saveTripToCloud(); };
                 div.innerHTML = `
                     <div class="flex items-center gap-2"><i class="fa-regular ${item.done ? 'fa-square-check text-emerald-600' : 'fa-square text-slate-400'} text-sm"></i><span>${item.text}</span></div>
@@ -1556,13 +1559,18 @@
             currentTripData.destination = document.getElementById('input-trip-destination').value;
             currentTripData.budget = Number(document.getElementById('input-trip-budget').value);
             currentTripData.members = Number(document.getElementById('input-trip-members').value);
+            
+            const collabInput = document.getElementById('input-trip-collaborators').value;
+            currentTripData.collaborators = collabInput ? collabInput.split(',').map(s => s.trim()).filter(Boolean) : [];
+
             let cp = document.getElementById('input-trip-cover-base64').value;
             if (!cp) cp = document.getElementById('input-trip-cover').value || currentTripData.coverPhoto;
             currentTripData.coverPhoto = cp;
             currentTripData.notes = document.getElementById('input-trip-notes').value;
+            
             saveTripToCloud();
             closeModal('edit-trip-modal');
-            showToast('已更新並同步雲端', 'success');
+            showToast('已更新並同步雲端共編', 'success');
         };
 
         window.handleCreateNewProject = function(e) {
@@ -1580,6 +1588,7 @@
             currentTripId = newId;
             currentTripData = {
                 id: newId, title, startDate: start, endDate: end, destination: dest, budget, members: mem,
+                collaborators: [],
                 coverPhoto: cp, notes, itinerary: [], expenses: [],
                 checklist: [{ id: 'c1', text: '護照與證件', done: false }]
             };
@@ -1635,27 +1644,48 @@
             if (!container) return;
             container.innerHTML = '<p class="text-slate-400 text-center py-2">載入專案中...</p>';
             
-            let pIds = [currentTripId];
+            let pIds = [];
+            let pMap = {};
+            
+            // 從本機讀取
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('local_trip_')) {
+                    try {
+                        const dat = JSON.parse(localStorage.getItem(k));
+                        if (dat && dat.id) {
+                            pMap[dat.id] = dat.title;
+                        }
+                    } catch(e){}
+                }
+            }
+
             try {
                 if (supabaseClient && currentUser) {
-                    const { data } = await supabaseClient.from('trips').select('id, title').eq('user_id', currentUser.id);
+                    const { data } = await supabaseClient.from('trips').select('id, title, data');
                     if (data) {
-                        pIds = data.map(d => d.id);
-                        if (!pIds.includes(currentTripId)) pIds.push(currentTripId);
+                        data.forEach(d => {
+                            if (d.data) {
+                                const dat = d.data;
+                                const isOwner = (d.user_id === currentUser.id);
+                                const isCollab = (dat.collaborators || []).includes(currentUser.email);
+                                if (isOwner || isCollab) {
+                                    pMap[dat.id] = dat.title;
+                                }
+                            }
+                        });
                     }
                 }
             } catch(e) {}
 
+            if (!pMap[currentTripId]) pMap[currentTripId] = currentTripData.title;
+
             container.innerHTML = '';
-            pIds.forEach(id => {
-                let t = id;
-                try {
-                    const s = localStorage.getItem('local_trip_' + id);
-                    if (s) t = JSON.parse(s).title;
-                } catch(e){}
+            Object.keys(pMap).forEach(id => {
+                const tTitle = pMap[id];
                 const div = document.createElement('div');
                 div.className = `p-2.5 rounded-xl border flex justify-between items-center ${id === currentTripId ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`;
-                div.innerHTML = `<span class="font-bold cursor-pointer flex-1 text-slate-800" onclick="window.switchTrip('${id}')">${t}</span>`;
+                div.innerHTML = `<span class="font-bold cursor-pointer flex-1 text-slate-800" onclick="window.switchTrip('${id}')">${tTitle}</span>`;
                 container.appendChild(div);
             });
         };
@@ -1685,7 +1715,7 @@
             try {
                 const { error } = await supabaseClient.auth.signUp({ email, password });
                 if (error) throw error;
-                showToast('註冊成功！請檢查信箱或直接登入', 'success');
+                showToast('註冊成功！請直接登入', 'success');
                 switchAuthTab('login');
             } catch(err) {
                 showToast('註冊失敗: ' + err.message, 'error');
@@ -1737,6 +1767,7 @@
                 document.getElementById('input-trip-destination').value = currentTripData.destination;
                 document.getElementById('input-trip-budget').value = currentTripData.budget;
                 document.getElementById('input-trip-members').value = currentTripData.members;
+                document.getElementById('input-trip-collaborators').value = (currentTripData.collaborators || []).join(', ');
                 document.getElementById('input-trip-cover').value = currentTripData.coverPhoto;
                 document.getElementById('input-trip-notes').value = currentTripData.notes;
                 switchEditCoverMode('url');
@@ -1751,8 +1782,6 @@
                 document.getElementById('expense-date').value = currentTripData.startDate;
             }
             if (id === 'auth-modal') {
-                document.getElementById('sb-url-input').value = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || localStorage.getItem('sb_url') || '';
-                document.getElementById('sb-key-input').value = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.key) || localStorage.getItem('sb_key') || '';
                 const loggedPanel = document.getElementById('auth-logged-in-panel');
                 const loginForm = document.getElementById('auth-login-form');
                 const tabHeaders = document.getElementById('auth-tab-headers');

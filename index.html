@@ -101,8 +101,8 @@
         </div>
 
         <div class="flex items-center gap-1.5 flex-shrink-0 text-xs">
-            <button onclick="installAppPrompt()" id="install-btn" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-sm text-[10px]">
-                <i class="fa-solid fa-download"></i> 安裝
+            <button onclick="openInstallGuide()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-sm text-[10px]" title="安裝 App 到手機桌面">
+                <i class="fa-solid fa-download"></i> 安裝 App
             </button>
             <button onclick="goHomeLanding()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg border border-slate-200 font-bold" title="首頁">
                 <i class="fa-solid fa-house text-amber-600 mr-1"></i>首頁
@@ -433,6 +433,39 @@
         </div>
     </div>
 
+    <!-- 0-2. 安裝說明彈窗 (支援 iPhone & Android) -->
+    <div id="install-guide-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl relative text-xs space-y-3">
+            <button onclick="closeModal('install-guide-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-mobile-screen-button text-amber-500"></i> 將旅書安裝至手機桌面
+            </h3>
+            
+            <div id="install-guide-ios" class="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p class="font-bold text-slate-800">🍎 iPhone / iPad (iOS Safari)</p>
+                <ol class="list-decimal list-inside space-y-1 text-slate-600 text-[11px]">
+                    <li>確認您使用的是 <span class="font-bold text-slate-800">Safari 瀏覽器</span>。</li>
+                    <li>點擊下方工具列的 <span class="font-bold text-slate-800"><i class="fa-solid fa-arrow-up-from-bracket"></i> 分享</span> 按鈕。</li>
+                    <li>在選單中向下捲動並點選 <span class="font-bold text-amber-600"><i class="fa-solid fa-square-plus"></i> 加入主畫面</span>。</li>
+                    <li>點擊右上角的「新增」，即可在主畫面使用！</li>
+                </ol>
+            </div>
+
+            <div id="install-guide-android" class="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p class="font-bold text-slate-800">🤖 Android (Chrome)</p>
+                <ol class="list-decimal list-inside space-y-1 text-slate-600 text-[11px]">
+                    <li>確認您使用的是 <span class="font-bold text-slate-800">Chrome 瀏覽器</span>。</li>
+                    <li>點擊右上角選單 <span class="font-bold text-slate-800"><i class="fa-solid fa-ellipsis-vertical"></i></span>。</li>
+                    <li>點擊 <span class="font-bold text-amber-600"><i class="fa-solid fa-circle-down"></i> 安裝應用程式</span> 或「加到主畫面」。</li>
+                    <li>依照提示確認安裝即可！</li>
+                </ol>
+                <button id="btn-native-install" onclick="triggerNativeInstall()" class="hidden w-full bg-amber-600 text-white font-bold py-2 rounded-lg shadow-sm mt-1">
+                    <i class="fa-solid fa-download mr-1"></i> 立即安裝 App
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 1. 編輯專案與共編設定 -->
     <div id="edit-trip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative max-h-[85vh] overflow-y-auto text-xs">
@@ -726,29 +759,41 @@
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 deferredPrompt = e;
-                const btn = document.getElementById('install-btn');
-                if (btn) btn.classList.remove('hidden');
             });
             window.addEventListener('appinstalled', () => {
                 deferredPrompt = null;
-                const btn = document.getElementById('install-btn');
-                if (btn) btn.classList.add('hidden');
                 showToast('已成功安裝旅書 App！', 'success');
             });
         }
 
-        window.installAppPrompt = function() {
+        window.openInstallGuide = function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const iosGuide = document.getElementById('install-guide-ios');
+            const androidGuide = document.getElementById('install-guide-android');
+            const nativeBtn = document.getElementById('btn-native-install');
+
+            if (iosGuide) iosGuide.classList.toggle('hidden', !isIOS);
+            if (androidGuide) androidGuide.classList.toggle('hidden', isIOS);
+
+            if (!isIOS && nativeBtn) {
+                nativeBtn.classList.toggle('hidden', !deferredPrompt);
+            }
+
+            openModal('install-guide-modal');
+        };
+
+        window.triggerNativeInstall = async function() {
             if (!deferredPrompt) {
-                showToast('請點選瀏覽器選單 (⋮) 並選擇「加到主畫面」', 'info');
+                showToast('您的瀏覽器已安裝或未提供安裝捷徑', 'info');
                 return;
             }
             deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((choiceResult) => {
-                if (choiceResult.outcome === 'accepted') {
-                    showToast('感謝安裝！', 'success');
-                }
-                deferredPrompt = null;
-            });
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                showToast('感謝安裝！', 'success');
+            }
+            deferredPrompt = null;
+            closeModal('install-guide-modal');
         };
 
         function getInitialTripData() {

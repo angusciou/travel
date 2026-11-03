@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅書 TravelBook - Supabase 雲端共編版</title>
+    <title>旅書 TravelBook - Supabase 雲端共編同步版</title>
     <meta name="theme-color" content="#d97706">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -236,7 +236,6 @@
                     </div>
                 </div>
 
-                <!-- 共編設定區塊摘要 -->
                 <div onclick="openModal('edit-trip-modal')" class="bg-indigo-50/80 p-3 rounded-xl border border-indigo-200 cursor-pointer shadow-sm flex items-center justify-between text-xs">
                     <div>
                         <h4 class="font-bold text-indigo-900 flex items-center gap-1.5"><i class="fa-solid fa-user-gear"></i> 雲端共編授權名單</h4>
@@ -451,7 +450,6 @@
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="input-trip-members" min="1" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 
-                <!-- 帳號共編授權設定 -->
                 <div class="bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-200 space-y-1">
                     <label class="block font-bold text-indigo-900"><i class="fa-solid fa-user-gear mr-1"></i> 共編授權帳號 (Email)</label>
                     <p class="text-[10px] text-indigo-700">輸入其他已註冊使用者的 Email（多個帳號請用逗號隔開），賦予其同步編輯此專案的權限。</p>
@@ -696,7 +694,23 @@
                 currentUser = session?.user || null;
                 updateSyncIndicator();
                 if (currentUser) {
+                    await fetchAllCloudTrips();
                     await loadTripFromCloud(currentTripId);
+                }
+            } catch(e) {}
+        }
+
+        async function fetchAllCloudTrips() {
+            if (!supabaseClient || !currentUser) return;
+            try {
+                const { data, error } = await supabaseClient.from('trips').select('*');
+                if (!error && data) {
+                    data.forEach(row => {
+                        if (row.data) {
+                            const dat = row.data;
+                            localStorage.setItem('local_trip_' + dat.id, JSON.stringify(dat));
+                        }
+                    });
                 }
             } catch(e) {}
         }
@@ -792,6 +806,7 @@
                     const { data } = await supabaseClient.from('trips').select('data').eq('id', tId).single();
                     if (data && data.data) {
                         currentTripData = data.data;
+                        localStorage.setItem('local_trip_' + tId, JSON.stringify(currentTripData));
                         renderTripData();
                         return;
                     }
@@ -813,6 +828,7 @@
 
         window.goHomeLanding = async function() {
             if (supabaseClient && currentUser) {
+                await fetchAllCloudTrips();
                 await loadTripFromCloud(currentTripId);
             }
             const home = document.getElementById('page-home');
@@ -885,6 +901,9 @@
         };
 
         async function getAllLocalAndCloudTrips() {
+            if (supabaseClient && currentUser) {
+                await fetchAllCloudTrips();
+            }
             let mapTrips = {};
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -895,24 +914,6 @@
                     } catch(e){}
                 }
             }
-            try {
-                if (supabaseClient && currentUser) {
-                    const { data } = await supabaseClient.from('trips').select('id, user_id, data');
-                    if (data) {
-                        data.forEach(d => { 
-                            if (d.data) {
-                                const dat = d.data;
-                                const isOwner = (d.user_id === currentUser.id);
-                                const isCollab = (dat.collaborators || []).includes(currentUser.email);
-                                if (isOwner || isCollab) {
-                                    mapTrips[dat.id] = dat;
-                                    localStorage.setItem('local_trip_' + dat.id, JSON.stringify(dat));
-                                }
-                            }
-                        });
-                    }
-                }
-            } catch(e){}
             if (Object.keys(mapTrips).length === 0) {
                 mapTrips[currentTripId] = currentTripData;
             }
@@ -1648,8 +1649,11 @@
             if (!container) return;
             container.innerHTML = '<p class="text-slate-400 text-center py-2">載入專案中...</p>';
             
+            if (supabaseClient && currentUser) {
+                await fetchAllCloudTrips();
+            }
+
             let pMap = {};
-            
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 if (k && k.startsWith('local_trip_')) {
@@ -1661,25 +1665,6 @@
                     } catch(e){}
                 }
             }
-
-            try {
-                if (supabaseClient && currentUser) {
-                    const { data } = await supabaseClient.from('trips').select('id, user_id, title, data');
-                    if (data) {
-                        data.forEach(d => {
-                            if (d.data) {
-                                const dat = d.data;
-                                const isOwner = (d.user_id === currentUser.id);
-                                const isCollab = (dat.collaborators || []).includes(currentUser.email);
-                                if (isOwner || isCollab) {
-                                    pMap[dat.id] = dat.title;
-                                    localStorage.setItem('local_trip_' + dat.id, JSON.stringify(dat));
-                                }
-                            }
-                        });
-                    }
-                }
-            } catch(e) {}
 
             if (!pMap[currentTripId]) pMap[currentTripId] = currentTripData.title;
 
@@ -1737,6 +1722,7 @@
                 updateSyncIndicator();
                 closeModal('auth-modal');
                 showToast('登入成功', 'success');
+                await fetchAllCloudTrips();
                 await loadTripFromCloud(currentTripId);
                 goHomeLanding();
             } catch(err) {

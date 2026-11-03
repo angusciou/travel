@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅書 TravelBook - 雲端多裝置同步版</title>
+    <title>旅書 TravelBook - Supabase 雲端同步版</title>
     <meta name="theme-color" content="#d97706">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,7 +13,7 @@
     <script>
         try {
             const manifestData = {
-                "name": "旅書 TravelBook 雲端版",
+                "name": "旅書 TravelBook Supabase版",
                 "short_name": "旅書",
                 "start_url": "./index.html",
                 "display": "standalone",
@@ -54,9 +54,21 @@
     <!-- SheetJS for Excel Processing -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+    <!-- Chart.js for Pie Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- 讀取選配的外部 config.js -->
+    <script>
+        window.SUPABASE_CONFIG = { url: '', key: '' };
+    </script>
+    <script src="./config.js" onerror="console.log('未偵測到 config.js，將使用內建或手動設定')"></script>
 
     <style>
         body { 
@@ -76,13 +88,13 @@
     
     <!-- 頂部導航列 -->
     <header class="relative z-30 bg-white border-b border-slate-200 px-3 py-2.5 text-slate-800 flex items-center justify-between shadow-xs flex-shrink-0">
-        <div class="flex items-center space-x-2 min-w-0">
+        <div class="flex items-center space-x-2 min-w-0 cursor-pointer" onclick="goHomeLanding()">
             <div class="bg-amber-500 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
                 <i class="fa-solid fa-book-open"></i>
             </div>
             <div class="min-w-0">
-                <h1 id="header-trip-title" class="text-xs font-bold truncate text-slate-900">載入中...</h1>
-                <p id="header-trip-dates" class="text-[9px] text-slate-500">雲端同步旅遊手帳</p>
+                <h1 id="header-trip-title" class="text-xs font-bold truncate text-slate-900">旅書 TravelBook</h1>
+                <p id="header-trip-dates" class="text-[9px] text-slate-500">點擊返回首頁</p>
             </div>
         </div>
 
@@ -90,11 +102,8 @@
             <button onclick="installAppPrompt()" id="install-btn" class="hidden bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded-lg transition flex items-center gap-1 shadow-xs text-[10px]">
                 <i class="fa-solid fa-download"></i> 安裝
             </button>
-            <button onclick="openModal('project-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200" title="專案清單">
-                <i class="fa-solid fa-folder-open text-amber-600"></i>
-            </button>
-            <button onclick="openModal('share-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200" title="分享">
-                <i class="fa-solid fa-share-nodes text-sky-600"></i>
+            <button onclick="goHomeLanding()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg border border-slate-200 font-bold" title="首頁">
+                <i class="fa-solid fa-house text-amber-600 mr-1"></i>首頁
             </button>
             <button onclick="openModal('auth-modal')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg border border-slate-200 relative" title="帳號">
                 <i class="fa-solid fa-user-circle text-emerald-600"></i>
@@ -107,8 +116,88 @@
     <main class="relative z-20 flex-1 flex flex-col p-3 overflow-y-auto max-w-md mx-auto w-full pb-24" id="main-swipe-area">
         <div class="flex-1 flex flex-col pb-4">
             
+            <!-- 0. 迎賓首頁 (Landing Page) -->
+            <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');" id="home-bg-container">
+                <div class="absolute top-3 right-3 z-10 flex gap-1.5">
+                    <button onclick="openModal('edit-home-bg-modal')" class="bg-black/40 hover:bg-black/60 text-white text-[10px] px-2.5 py-1 rounded-lg backdrop-blur-xs transition flex items-center gap-1 shadow-xs">
+                        <i class="fa-solid fa-image"></i> 自訂背景
+                    </button>
+                </div>
+
+                <div class="text-center space-y-2 relative z-10 pt-2 text-white">
+                    <div class="w-16 h-16 bg-gradient-to-tr from-amber-500 to-orange-400 text-white rounded-3xl mx-auto flex items-center justify-center text-2xl shadow-lg">
+                        <i class="fa-solid fa-compass"></i>
+                    </div>
+                    <h2 class="text-xl font-extrabold tracking-wide">旅書 TravelBook</h2>
+                    <p class="text-xs text-slate-300">記錄您的每一刻精彩旅程與智慧分帳</p>
+                </div>
+
+                <!-- 三大記憶模組選單 -->
+                <div class="space-y-3 pt-2 relative z-10">
+                    <!-- 1. 計畫回憶 -->
+                    <div onclick="openModal('new-project-modal')" class="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-4 rounded-2xl shadow-md cursor-pointer hover:scale-[1.02] active:scale-95 transition flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-map-location-dot"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold">計畫回憶</h3>
+                                <p class="text-[10px] text-amber-100">建立新專案、規劃未來的精彩旅程</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs text-amber-200"></i>
+                    </div>
+
+                    <!-- 2. 創造回憶 -->
+                    <div onclick="openLandingCategory('active')" class="bg-white/95 backdrop-blur-xs border border-white/20 p-4 rounded-2xl shadow-xs cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-plane-departure"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold">創造回憶</h3>
+                                <p class="text-[10px] text-slate-500">查看進行中的熱血旅遊專案</p>
+                            </div>
+                        </div>
+                        <span id="count-active" class="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+
+                    <!-- 3. 回憶過去 -->
+                    <div onclick="openLandingCategory('past')" class="bg-white/95 backdrop-blur-xs border border-white/20 p-4 rounded-2xl shadow-xs cursor-pointer hover:bg-white hover:shadow-md transition flex items-center justify-between text-slate-800">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-box-archive"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold">回憶過去</h3>
+                                <p class="text-[10px] text-slate-500">溫習已圓滿結束的歷史旅程</p>
+                            </div>
+                        </div>
+                        <span id="count-past" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                    </div>
+                </div>
+
+                <div class="pt-4 text-center relative z-10">
+                    <button onclick="openModal('project-modal')" class="text-xs text-amber-300 font-bold hover:underline">
+                        <i class="fa-solid fa-folder-open mr-1"></i>管理所有專案庫
+                    </button>
+                </div>
+            </div>
+
+            <!-- 專案分類檢視面板 -->
+            <div id="page-category-list" class="space-y-3 hidden">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+                    <button onclick="goHomeLanding()" class="text-xs font-bold text-amber-600 flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-left"></i> 返回首頁
+                    </button>
+                    <h3 id="category-title-display" class="text-xs font-bold text-slate-800">專案清單</h3>
+                    <div></div>
+                </div>
+                <div id="category-projects-container" class="space-y-2"></div>
+            </div>
+
             <!-- 第 1 頁：封面與基本資料 -->
-            <div id="page-1" class="space-y-3 page-panel">
+            <div id="page-1" class="space-y-3 page-panel hidden">
                 <div class="relative h-44 rounded-2xl overflow-hidden shadow-sm bg-slate-200 border border-slate-200">
                     <img id="cover-photo" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
@@ -122,24 +211,23 @@
                     </button>
                 </div>
 
-                <!-- 四張點擊即編輯的摘要卡片 -->
                 <div class="grid grid-cols-2 gap-2">
-                    <div onclick="openModal('edit-trip-modal')" class="bg-amber-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-amber-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-amber-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-amber-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
                         <i class="fa-regular fa-calendar-days text-amber-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">日期時間 (點擊編輯)</p>
                         <p id="cover-dates" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-sky-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-sky-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-sky-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-sky-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
                         <i class="fa-solid fa-location-dot text-sky-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">主要目的地 (點擊編輯)</p>
                         <p id="cover-destination" class="text-xs font-bold text-slate-800 mt-0.5 truncate">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-emerald-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-emerald-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-emerald-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-emerald-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
                         <i class="fa-solid fa-coins text-emerald-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">預算預估 (點擊編輯)</p>
                         <p id="cover-budget" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
                     </div>
-                    <div onclick="openModal('edit-trip-modal')" class="bg-purple-50/80 backdrop-blur-xs p-2.5 rounded-xl border border-purple-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
+                    <div onclick="openModal('edit-trip-modal')" class="bg-purple-50/85 backdrop-blur-xs p-2.5 rounded-xl border border-purple-200 text-center cursor-pointer active:scale-95 transition shadow-2xs">
                         <i class="fa-solid fa-users text-purple-600 text-sm mb-0.5"></i>
                         <p class="text-[10px] text-slate-500">同行夥伴 (點擊編輯)</p>
                         <p id="cover-members" class="text-xs font-bold text-slate-800 mt-0.5">-</p>
@@ -165,10 +253,8 @@
                     </div>
                 </div>
 
-                <!-- 天數導覽列 -->
                 <div id="day-tabs-container" class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"></div>
 
-                <!-- 地圖區塊 -->
                 <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
                     <div class="flex items-center justify-between px-1">
                         <span class="text-[11px] font-bold text-slate-700"><i class="fa-solid fa-map text-amber-500 mr-1"></i> 景點地圖檢視 (繁體中文)</span>
@@ -176,22 +262,20 @@
                     <div id="leaflet-map-container" class="w-full h-48 rounded-lg overflow-hidden border border-slate-200 bg-slate-100"></div>
                 </div>
 
-                <!-- 行程列表 -->
                 <div id="itinerary-timeline" class="space-y-2"></div>
             </div>
 
-            <!-- 第 3 頁：花費統計與圓餅圖 -->
+            <!-- 第 3 頁：花費統計與分帳 -->
             <div id="page-3" class="space-y-3 page-panel hidden">
                 <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
                     <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                        <i class="fa-solid fa-receipt text-emerald-600"></i> 花費記帳
+                        <i class="fa-solid fa-receipt text-emerald-600"></i> 花費記帳與智慧分帳
                     </h2>
                     <button onclick="openModal('add-expense-modal')" class="bg-emerald-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">
                         <i class="fa-solid fa-plus"></i> 新增
                     </button>
                 </div>
 
-                <!-- 篩選列 -->
                 <div class="bg-white p-2.5 rounded-xl border border-slate-200 grid grid-cols-3 gap-1.5 text-[10px]">
                     <select id="expense-filter-date" onchange="renderExpenses()" class="bg-slate-50 border border-slate-200 rounded p-1 outline-none">
                         <option value="ALL">全部日期</option>
@@ -204,7 +288,6 @@
                     </select>
                 </div>
 
-                <!-- 摘要卡片 -->
                 <div class="grid grid-cols-3 gap-2">
                     <div class="bg-white p-2 rounded-xl border border-slate-200 text-center shadow-2xs">
                         <p class="text-[9px] text-slate-500">總支出</p>
@@ -220,7 +303,14 @@
                     </div>
                 </div>
 
-                <!-- 圓餅圖與比例 -->
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                    <h4 class="text-xs font-bold text-slate-700 flex items-center justify-between">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-scale-balanced text-amber-600"></i> 智慧結算建議與還款確認</span>
+                        <span class="text-[9px] text-slate-400 font-normal">勾選代表已結清轉帳</span>
+                    </h4>
+                    <div id="settlement-container" class="space-y-1.5 text-[11px]"></div>
+                </div>
+
                 <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
                     <div class="flex justify-between items-center">
                         <h4 class="text-xs font-bold text-slate-700">分類支出佔比</h4>
@@ -235,7 +325,6 @@
                     <div id="expense-bar-chart" class="space-y-1.5 text-[11px] pt-2"></div>
                 </div>
 
-                <!-- 明細列表 -->
                 <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
                     <h4 class="text-xs font-bold text-slate-700 mb-2">支出明細紀錄</h4>
                     <div id="expense-list-container" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
@@ -286,7 +375,10 @@
 
     <!-- 底部固定導航列 -->
     <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-3 py-2 flex items-center justify-around text-slate-400 flex-shrink-0 shadow-lg">
-        <button onclick="goToPage(1)" id="nav-btn-1" class="flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600">
+        <button onclick="goHomeLanding()" id="nav-btn-home" class="flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600">
+            <i class="fa-solid fa-house text-base"></i> <span>首頁</span>
+        </button>
+        <button onclick="goToPage(1)" id="nav-btn-1" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
             <i class="fa-solid fa-book-open text-base"></i> <span>封面</span>
         </button>
         <button onclick="goToPage(2)" id="nav-btn-2" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
@@ -298,12 +390,38 @@
         <button onclick="goToPage(4)" id="nav-btn-4" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
             <i class="fa-solid fa-clipboard-check text-base"></i> <span>行李</span>
         </button>
-        <button onclick="goToPage(5)" id="nav-btn-5" class="flex flex-col items-center gap-0.5 text-[10px] font-bold">
-            <i class="fa-solid fa-share-nodes text-base"></i> <span>總覽</span>
-        </button>
     </nav>
 
     <!-- 彈窗群組 -->
+
+    <!-- 0-1. 自訂迎賓頁背景 -->
+    <div id="edit-home-bg-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs space-y-3">
+            <button onclick="closeModal('edit-home-bg-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="font-bold text-slate-900 text-sm"><i class="fa-solid fa-image text-amber-500 mr-1"></i> 自訂迎賓頁背景圖</h3>
+            
+            <div class="space-y-2">
+                <div class="flex gap-2 mb-1">
+                    <button type="button" onclick="switchHomeBgMode('url')" id="btn-home-url" class="flex-1 py-1 rounded bg-amber-500 text-white font-bold">圖片網址</button>
+                    <button type="button" onclick="switchHomeBgMode('file')" id="btn-home-file" class="flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold">本機上傳</button>
+                </div>
+                <div id="home-bg-url-wrap">
+                    <label class="block font-bold text-slate-700 mb-1">背景圖片網址 (URL)</label>
+                    <input type="url" id="input-home-bg-url" placeholder="https://..." class="w-full border border-slate-200 rounded p-1.5 outline-none">
+                </div>
+                <div id="home-bg-file-wrap" class="hidden">
+                    <label class="block font-bold text-slate-700 mb-1">選擇本機圖片</label>
+                    <input type="file" id="input-home-bg-file" accept="image/*" onchange="handleHomeBgUpload(event)" class="w-full border border-slate-200 rounded p-1 text-[11px] bg-slate-50">
+                    <input type="hidden" id="input-home-bg-base64">
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button onclick="resetHomeBackground()" class="flex-1 bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg">恢復預設</button>
+                <button onclick="saveHomeBackground()" class="flex-1 bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">套用背景</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 1. 編輯專案 -->
     <div id="edit-trip-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
@@ -369,23 +487,34 @@
     <div id="add-expense-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('add-expense-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增記帳項目</h3>
+            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增記帳品項與彈性分帳</h3>
             <form onsubmit="handleAddExpense(event)" class="space-y-2.5">
-                <div><label class="block font-bold text-slate-700 mb-1">項目名稱</label><input type="text" id="expense-title" required placeholder="例: 午餐" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">項目名稱</label><input type="text" id="expense-title" required placeholder="例: 幫買伴手禮" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div class="grid grid-cols-2 gap-2">
-                    <div><label class="block font-bold text-slate-700 mb-1">金額 (TWD)</label><input type="number" id="expense-amount" required min="1" placeholder="500" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">金額 (TWD)</label><input type="number" id="expense-amount" required min="1" placeholder="1500" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                     <div><label class="block font-bold text-slate-700 mb-1">日期</label><input type="date" id="expense-date" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block font-bold text-slate-700 mb-1">分類</label>
-                        <select id="expense-category" onchange="handleExpenseCategoryChange(this.value)" class="w-full border border-slate-200 rounded p-1.5 outline-none">
+                        <select id="expense-category" class="w-full border border-slate-200 rounded p-1.5 outline-none">
                             <option value="food">🍜 餐飲美食</option><option value="transport">✈️ 交通運具</option><option value="hotel">🏨 住宿旅館</option><option value="tickets">🎫 門票娛樂</option><option value="shopping">🛍️ 購物伴手禮</option><option value="other">📦 其它雜項</option>
                         </select>
                     </div>
-                    <div><label class="block font-bold text-slate-700 mb-1">付款人</label><input type="text" id="expense-payer" placeholder="例如: 小明" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">實際付款人</label><input type="text" id="expense-payer" placeholder="例: 小明" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-2xs">記錄支出</button>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">分帳模式</label>
+                    <select id="expense-split-mode" class="w-full border border-slate-200 rounded p-1.5 outline-none bg-slate-50">
+                        <option value="normal">均分模式 (付款人也參與分攤)</option>
+                        <option value="payer_excluded">代墊模式 (付款人不需付錢，僅分攤人還款)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">參與分攤成員 (以逗號分隔)</label>
+                    <input type="text" id="expense-participants" value="小明, 小華, 小美" required class="w-full border border-slate-200 rounded p-1.5 outline-none" placeholder="小華, 小美">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-2xs">記錄支出並計算分帳</button>
             </form>
         </div>
     </div>
@@ -455,47 +584,48 @@
         </div>
     </div>
 
-    <!-- 6. 分享權限 -->
-    <div id="share-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
-            <button onclick="closeModal('share-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-2 text-sm"><i class="fa-solid fa-share-nodes text-sky-500 mr-1"></i> 行程雲端分享</h3>
-            <div class="space-y-2.5">
-                <div>
-                    <label class="block font-bold text-slate-700 mb-1">專案 ID 代碼</label>
-                    <div class="flex gap-1.5">
-                        <input type="text" id="share-key-display" readonly class="flex-1 bg-slate-50 border border-slate-200 rounded p-1.5 font-mono text-[10px]">
-                        <button onclick="copyToClipboard(document.getElementById('share-key-display').value)" class="bg-sky-600 text-white px-2.5 py-1 rounded shadow-2xs">複製</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 7. 使用者帳號與雲端同步 -->
+    <!-- 6. Supabase 帳號與雲端同步設定 -->
     <div id="auth-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl max-w-xs w-full p-4 shadow-xl relative text-xs">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-4 shadow-xl relative text-xs space-y-3">
             <button onclick="closeModal('auth-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <div class="flex border-b border-slate-200 mb-3" id="auth-tab-headers">
-                <button onclick="switchAuthTab('login')" id="tab-login-btn" class="flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center">登入雲端</button>
-                <button onclick="switchAuthTab('register')" id="tab-register-btn" class="flex-1 pb-1.5 font-bold text-slate-400 text-center">註冊</button>
+            <h3 class="font-bold text-slate-900 text-sm"><i class="fa-solid fa-cloud text-amber-500 mr-1"></i> Supabase 雲端資料庫設定</h3>
+            
+            <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-[10px] text-amber-900 space-y-1">
+                <p class="font-bold">💡 雲端同步設定步驟：</p>
+                <p>1. 開啟 <a href="https://supabase.com" target="_blank" class="underline font-bold">Supabase</a> 建立新專案。</p>
+                <p>2. 至 SQL Editor 執行 `supabase-schema.sql`。</p>
+                <p>3. 複製專案 URL 與金鑰填入下方（或建立 `config.js`）。</p>
             </div>
-            <form id="auth-login-form" onsubmit="handleUserLogin(event)" class="space-y-2.5">
-                <div><label class="block font-bold text-slate-700 mb-1">電子郵件</label><input type="email" id="login-email" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="login-password" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                <button type="submit" class="w-full bg-slate-900 text-white font-semibold py-2 rounded-lg shadow-2xs">登入雲端</button>
+
+            <div id="supabase-config-panel" class="space-y-2 border-b pb-3">
+                <div><label class="block font-bold text-slate-700 mb-0.5">Supabase URL</label><input type="text" id="sb-url-input" placeholder="https://xxx.supabase.co" class="w-full border rounded p-1.5 outline-none font-mono text-[10px]"></div>
+                <div><label class="block font-bold text-slate-700 mb-0.5">Supabase Anon Key</label><input type="password" id="sb-key-input" placeholder="eyJhbGciOi..." class="w-full border rounded p-1.5 outline-none font-mono text-[10px]"></div>
+                <button onclick="saveSupabaseConfig()" class="w-full bg-slate-800 text-white font-semibold py-1.5 rounded">儲存連線設定</button>
+            </div>
+
+            <div class="flex border-b border-slate-200 mb-2" id="auth-tab-headers">
+                <button onclick="switchAuthTab('login')" id="tab-login-btn" class="flex-1 pb-1 font-bold text-amber-600 border-b-2 border-amber-600 text-center">登入</button>
+                <button onclick="switchAuthTab('register')" id="tab-register-btn" class="flex-1 pb-1 font-bold text-slate-400 text-center">註冊</button>
+            </div>
+            
+            <form id="auth-login-form" onsubmit="handleUserLogin(event)" class="space-y-2">
+                <div><label class="block font-bold text-slate-700 mb-1">Email</label><input type="email" id="login-email" required class="w-full border rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="login-password" required class="w-full border rounded p-1.5 outline-none"></div>
+                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg">登入雲端</button>
             </form>
-            <form id="auth-register-form" onsubmit="handleUserRegister(event)" class="space-y-2.5 hidden">
-                <div><label class="block font-bold text-slate-700 mb-1">電子郵件</label><input type="email" id="reg-email" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="reg-password" required minlength="6" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-2xs">註冊雲端帳號</button>
+            
+            <form id="auth-register-form" onsubmit="handleUserRegister(event)" class="space-y-2 hidden">
+                <div><label class="block font-bold text-slate-700 mb-1">Email</label><input type="email" id="reg-email" required class="w-full border rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="reg-password" required minlength="6" class="w-full border rounded p-1.5 outline-none"></div>
+                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg">註冊新帳號</button>
             </form>
-            <div id="auth-logged-in-panel" class="hidden space-y-2.5">
-                <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+
+            <div id="auth-logged-in-panel" class="hidden space-y-2">
+                <div class="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
                     <p class="text-slate-500 text-[10px]">已連線雲端帳號：</p>
                     <p class="font-bold text-emerald-800 text-xs truncate" id="logged-user-display"></p>
                 </div>
-                <button onclick="handleUserLogout()" class="w-full bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg">登出雲端</button>
+                <button onclick="handleUserLogout()" class="w-full bg-slate-100 text-slate-700 font-semibold py-1.5 rounded">登出</button>
             </div>
         </div>
     </div>
@@ -503,20 +633,9 @@
     <!-- 吐司通知 -->
     <div id="toast-container" class="fixed bottom-16 right-3 z-50 flex flex-col gap-1.5 pointer-events-none"></div>
 
-    <!-- Firebase SDKs & App Logic -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'travel-journal-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyDummyKeyForStaticDeployment",
-            authDomain: "travel-journal.firebaseapp.com",
-            projectId: "travel-journal"
-        };
-
-        let app, db, auth;
+    <!-- App Logic -->
+    <script>
+        let supabaseClient = null;
         let currentUser = null;
         let currentTripId = localStorage.getItem('last_trip_id') || 'default_trip';
         let currentTripData = getInitialTripData();
@@ -529,6 +648,7 @@
         let mapMarkersLayer = null;
         let chartType = 'pie';
         let expenseCanvasCtx = null;
+        let expenseChartInstance = null;
 
         const PRESET_CATEGORIES = {
             food: '🍜 餐飲美食', transport: '✈️ 交通運具', hotel: '🏨 住宿旅館',
@@ -536,34 +656,67 @@
         };
 
         window.addEventListener('DOMContentLoaded', async () => {
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, async (user) => {
-                    currentUser = user;
-                    const indicator = document.getElementById('cloud-sync-indicator');
-                    if (indicator) {
-                        indicator.className = `absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${user && !user.isAnonymous ? 'bg-emerald-500' : 'bg-amber-500'}`;
-                    }
-                    await loadTripFromCloud(currentTripId);
-                });
-            } catch (e) {
-                console.warn("Cloud init fallback to local:", e);
-            }
-
+            initSupabaseFromStorage();
             initPWAInstall();
-            renderTripData();
             setupTouchSwipe();
             initLeafletMap();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedTripId = urlParams.get('trip');
+            if (sharedTripId) {
+                await loadTripFromCloud(sharedTripId);
+                goToPage(1);
+            } else {
+                goHomeLanding();
+            }
         });
+
+        function initSupabaseFromStorage() {
+            const url = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || localStorage.getItem('sb_url');
+            const key = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.key) || localStorage.getItem('sb_key');
+            
+            if (url && key && window.supabase) {
+                try {
+                    supabaseClient = window.supabase.createClient(url, key);
+                    checkSupabaseAuth();
+                } catch(e) {
+                    console.warn("Supabase init error:", e);
+                }
+            }
+        }
+
+        window.saveSupabaseConfig = function() {
+            const url = document.getElementById('sb-url-input').value.trim();
+            const key = document.getElementById('sb-key-input').value.trim();
+            if (!url || !key) {
+                showToast('請填寫完整的 URL 與 Key', 'error');
+                return;
+            }
+            localStorage.setItem('sb_url', url);
+            localStorage.setItem('sb_key', key);
+            initSupabaseFromStorage();
+            showToast('Supabase 設定儲存成功', 'success');
+            closeModal('auth-modal');
+        };
+
+        async function checkSupabaseAuth() {
+            if (!supabaseClient) return;
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                currentUser = session?.user || null;
+                updateSyncIndicator();
+                if (currentUser) {
+                    await loadTripFromCloud(currentTripId);
+                }
+            } catch(e) {}
+        }
+
+        function updateSyncIndicator() {
+            const indicator = document.getElementById('cloud-sync-indicator');
+            if (indicator) {
+                indicator.className = `absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${currentUser ? 'bg-emerald-500' : 'bg-slate-300'}`;
+            }
+        }
 
         function initPWAInstall() {
             window.addEventListener('beforeinstallprompt', (e) => {
@@ -582,13 +735,13 @@
 
         window.installAppPrompt = function() {
             if (!deferredPrompt) {
-                showToast('請點選瀏覽器選單 (⋮) 並選擇「加到主畫面」或「安裝應用程式」', 'info');
+                showToast('請點選瀏覽器選單 (⋮) 並選擇「加到主畫面」', 'info');
                 return;
             }
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then((choiceResult) => {
                 if (choiceResult.outcome === 'accepted') {
-                    showToast('感謝您的安裝！', 'success');
+                    showToast('感謝安裝！', 'success');
                 }
                 deferredPrompt = null;
             });
@@ -610,9 +763,10 @@
                     { id: '2', day: 1, time: '16:00', title: '清水寺夜楓', address: '清水寺', type: 'sightseeing', cost: 400, notes: '拍照留念' }
                 ],
                 expenses: [
-                    { id: 'e1', title: '特急車票', amount: 1200, category: 'transport', date: '2026-10-15', payer: '小明' },
-                    { id: 'e2', title: '清水寺門票', amount: 400, category: 'tickets', date: '2026-10-15', payer: '小華' }
+                    { id: 'e1', title: '特急車票', amount: 1200, category: 'transport', date: '2026-10-15', payer: '小明', participants: ['小明', '小華', '小美'], splitMode: 'normal' },
+                    { id: 'e2', title: '代墊伴手禮', amount: 900, category: 'shopping', date: '2026-10-15', payer: '小明', participants: ['小華', '小美'], splitMode: 'payer_excluded' }
                 ],
+                settlementsPaid: {},
                 checklist: [
                     { id: 'c1', text: '護照與日圓現金', done: true },
                     { id: 'c2', text: '行動網卡 / 漫遊', done: false }
@@ -623,11 +777,15 @@
         async function saveTripToCloud() {
             try {
                 localStorage.setItem('local_trip_' + currentTripId, JSON.stringify(currentTripData));
-                if (db && auth && auth.currentUser) {
-                    const uId = auth.currentUser.uid;
-                    const docRef = doc(db, 'artifacts', appId, 'users', uId, 'trips', currentTripId);
-                    await setDoc(docRef, currentTripData);
-                    showToast('已同步至雲端', 'success');
+                if (supabaseClient && currentUser) {
+                    await supabaseClient.from('trips').upsert({
+                        id: currentTripId,
+                        user_id: currentUser.id,
+                        title: currentTripData.title,
+                        data: currentTripData,
+                        updated_at: new Date()
+                    });
+                    showToast('已同步至 Supabase 雲端', 'success');
                 }
             } catch (e) {
                 showToast('已儲存至本機', 'info');
@@ -639,12 +797,10 @@
             currentTripId = tId;
             localStorage.setItem('last_trip_id', currentTripId);
             try {
-                if (db && auth && auth.currentUser) {
-                    const uId = auth.currentUser.uid;
-                    const docRef = doc(db, 'artifacts', appId, 'users', uId, 'trips', currentTripId);
-                    const snap = await getDoc(docRef);
-                    if (snap.exists()) {
-                        currentTripData = snap.data();
+                if (supabaseClient && currentUser) {
+                    const { data } = await supabaseClient.from('trips').select('data').eq('id', tId).single();
+                    if (data && data.data) {
+                        currentTripData = data.data;
                         renderTripData();
                         return;
                     }
@@ -653,11 +809,212 @@
 
             const local = localStorage.getItem('local_trip_' + currentTripId);
             if (local) {
-                currentTripData = JSON.parse(local);
+                try {
+                    currentTripData = JSON.parse(local);
+                } catch(err) {
+                    currentTripData = getInitialTripData();
+                }
             } else {
                 currentTripData = getInitialTripData();
             }
             renderTripData();
+        }
+
+        window.goHomeLanding = function() {
+            const home = document.getElementById('page-home');
+            const catList = document.getElementById('page-category-list');
+            if (home) {
+                home.classList.remove('hidden');
+                const savedBg = localStorage.getItem('home_custom_bg');
+                if (savedBg) {
+                    home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${savedBg}')`;
+                }
+            }
+            if (catList) catList.classList.add('hidden');
+            for (let i = 1; i <= totalPages; i++) {
+                const p = document.getElementById(`page-${i}`);
+                if (p) p.classList.add('hidden');
+            }
+            updateLandingCounts();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.switchHomeBgMode = function(mode) {
+            const urlWrap = document.getElementById('home-bg-url-wrap');
+            const fileWrap = document.getElementById('home-bg-file-wrap');
+            const btnUrl = document.getElementById('btn-home-url');
+            const btnFile = document.getElementById('btn-home-file');
+            if (urlWrap) urlWrap.classList.toggle('hidden', mode !== 'url');
+            if (fileWrap) fileWrap.classList.toggle('hidden', mode !== 'file');
+            if (btnUrl) btnUrl.className = mode === 'url' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+            if (btnFile) btnFile.className = mode === 'file' ? 'flex-1 py-1 rounded bg-amber-500 text-white font-bold' : 'flex-1 py-1 rounded bg-slate-100 text-slate-600 font-bold';
+        };
+
+        window.handleHomeBgUpload = function(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                const base64Input = document.getElementById('input-home-bg-base64');
+                if (base64Input) base64Input.value = ev.target.result;
+                showToast('背景圖片就緒', 'success');
+            };
+            r.readAsDataURL(f);
+        };
+
+        window.saveHomeBackground = function() {
+            let bg = document.getElementById('input-home-bg-base64').value;
+            if (!bg) {
+                bg = document.getElementById('input-home-bg-url').value.trim();
+            }
+            if (!bg) {
+                showToast('請輸入網址或上傳圖片', 'error');
+                return;
+            }
+            localStorage.setItem('home_custom_bg', bg);
+            const home = document.getElementById('page-home');
+            if (home) {
+                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${bg}')`;
+            }
+            closeModal('edit-home-bg-modal');
+            showToast('迎賓頁背景已更新', 'success');
+        };
+
+        window.resetHomeBackground = function() {
+            localStorage.removeItem('home_custom_bg');
+            const home = document.getElementById('page-home');
+            if (home) {
+                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80')`;
+            }
+            closeModal('edit-home-bg-modal');
+            showToast('已恢復預設背景', 'info');
+        };
+
+        async function getAllLocalAndCloudTrips() {
+            let mapTrips = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('local_trip_')) {
+                    try {
+                        const dat = JSON.parse(localStorage.getItem(k));
+                        if (dat && dat.id) mapTrips[dat.id] = dat;
+                    } catch(e){}
+                }
+            }
+            try {
+                if (supabaseClient && currentUser) {
+                    const { data } = await supabaseClient.from('trips').select('id, data').eq('user_id', currentUser.id);
+                    if (data) {
+                        data.forEach(d => { if (d.data) mapTrips[d.id] = d.data; });
+                    }
+                }
+            } catch(e){}
+            if (Object.keys(mapTrips).length === 0) {
+                mapTrips[currentTripId] = currentTripData;
+            }
+            return Object.values(mapTrips);
+        }
+
+        async function updateLandingCounts() {
+            const trips = await getAllLocalAndCloudTrips();
+            const today = new Date().toISOString().split('T')[0];
+            let activeCount = 0;
+            let pastCount = 0;
+
+            trips.forEach(t => {
+                const end = t.endDate || today;
+                if (end >= today) activeCount++;
+                else pastCount++;
+            });
+
+            setElText('count-active', activeCount);
+            setElText('count-past', pastCount);
+        }
+
+        window.openLandingCategory = async function(category) {
+            const trips = await getAllLocalAndCloudTrips();
+            const today = new Date().toISOString().split('T')[0];
+            const filtered = trips.filter(t => {
+                const end = t.endDate || today;
+                return category === 'active' ? (end >= today) : (end < today);
+            });
+
+            const home = document.getElementById('page-home');
+            const catList = document.getElementById('page-category-list');
+            const container = document.getElementById('category-projects-container');
+            const titleEl = document.getElementById('category-title-display');
+
+            if (home) home.classList.add('hidden');
+            if (catList) catList.classList.remove('hidden');
+            if (titleEl) titleEl.innerText = category === 'active' ? '創造回憶 (進行中)' : '回憶過去 (已結束)';
+
+            if (container) {
+                container.innerHTML = '';
+                if (filtered.length === 0) {
+                    container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">此分類目前沒有旅遊專案</p>`;
+                    return;
+                }
+                filtered.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between cursor-pointer hover:border-amber-400 transition';
+                    div.onclick = async () => {
+                        await loadTripFromCloud(t.id);
+                        goToPage(1);
+                    };
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3 min-w-0">
+                            <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-slate-800 text-xs truncate">${t.title}</h4>
+                                <p class="text-[10px] text-slate-500 truncate">${t.startDate || ''} ~ ${t.endDate || ''} | ${t.destination || ''}</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-400 flex-shrink-0 ml-2"></i>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        };
+
+        window.goToPage = function(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            const home = document.getElementById('page-home');
+            const catList = document.getElementById('page-category-list');
+            if (home) home.classList.add('hidden');
+            if (catList) catList.classList.add('hidden');
+
+            for (let i = 1; i <= totalPages; i++) {
+                const p = document.getElementById(`page-${i}`);
+                if (p) p.classList.toggle('hidden', i !== page);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (page === 2) {
+                setTimeout(() => {
+                    if (!leafletMap) {
+                        initLeafletMap();
+                    }
+                    if (leafletMap) {
+                        leafletMap.invalidateSize();
+                        updateLeafletMapMarkers();
+                    }
+                }, 250);
+            }
+            if (page === 3) {
+                renderExpenses();
+            }
+        };
+
+        function setupTouchSwipe() {
+            let startX = 0;
+            const mc = document.getElementById('main-swipe-area');
+            if (!mc) return;
+            mc.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
+            mc.addEventListener('touchend', (e) => {
+                const diff = e.changedTouches[0].clientX - startX;
+                if (diff < -65) goToPage(currentPage + 1);
+                if (diff > 65) goToPage(currentPage - 1);
+            });
         }
 
         function renderTripData() {
@@ -666,11 +1023,11 @@
                 setElText('cover-trip-title', currentTripData.title);
                 setElText('summary-trip-title', currentTripData.title);
                 setElText('header-trip-dates', `${currentTripData.startDate} ~ ${currentTripData.endDate}`);
-                setElText('cover-dates', `${currentTripData.startDate.substr(5)} ~ ${currentTripData.endDate.substr(5)}`);
+                setElText('cover-dates', `${(currentTripData.startDate||'').substr(5)} ~ ${(currentTripData.endDate||'').substr(5)}`);
                 setElText('cover-destination', currentTripData.destination);
                 setElText('cover-budget', 'NT$ ' + Number(currentTripData.budget || 0).toLocaleString());
-                setElText('cover-members', currentTripData.members + ' 人');
-                setElText('cover-notes', currentTripData.notes);
+                setElText('cover-members', (currentTripData.members || 1) + ' 人');
+                setElText('cover-notes', currentTripData.notes || '暫無備忘');
                 
                 const coverImg = document.getElementById('cover-photo');
                 if (coverImg && currentTripData.coverPhoto) {
@@ -743,7 +1100,7 @@
                 return;
             }
 
-            dayEvents.sort((a,b) => a.time.localeCompare(b.time)).forEach((item, index) => {
+            dayEvents.sort((a,b) => (a.time || '').localeCompare(b.time || '')).forEach((item, index) => {
                 const div = document.createElement('div');
                 div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex items-start justify-between gap-2 text-xs';
                 div.innerHTML = `
@@ -766,6 +1123,11 @@
             });
         }
 
+        window.deleteItineraryItem = function(id) {
+            currentTripData.itinerary = currentTripData.itinerary.filter(i => i.id !== id);
+            saveTripToCloud();
+        };
+
         function getCategoryLabel(catKey) {
             return PRESET_CATEGORIES[catKey] || ('🏷️ ' + catKey);
         }
@@ -778,16 +1140,14 @@
                 leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([35.0116, 135.7681], 12);
                 L.control.zoom({ position: 'topright' }).addTo(leafletMap);
                 
-                // 改用完全免金鑰、無 403 限制且全球通用的 Esri World Street Map
+                // 更換為完全無阻擋、免金鑰且全球通用的 Esri World Street Map 圖資來源
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
                     maxZoom: 19,
                     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
                 }).addTo(leafletMap);
 
                 mapMarkersLayer = L.layerGroup().addTo(leafletMap);
-            } catch(e) {
-                console.warn("Leaflet init error:", e);
-            }
+            } catch(e) {}
         }
 
         function updateLeafletMapMarkers() {
@@ -814,6 +1174,23 @@
             if (dayEvents.length > 0) {
                 leafletMap.setView([latCenter, lngCenter], 13);
             }
+        }
+
+        function populateExpenseFilterOptions() {
+            const expenses = currentTripData.expenses || [];
+            const dateSel = document.getElementById('expense-filter-date');
+            const catSel = document.getElementById('expense-filter-category');
+            const payerSel = document.getElementById('expense-filter-payer');
+            if (!dateSel) return;
+
+            const dates = Array.from(new Set(expenses.map(e => e.date).filter(Boolean))).sort();
+            dateSel.innerHTML = '<option value="ALL">全部日期</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+
+            const cats = Array.from(new Set([...Object.keys(PRESET_CATEGORIES), ...expenses.map(e => e.category)]));
+            catSel.innerHTML = '<option value="ALL">全部分類</option>' + cats.map(c => `<option value="${c}">${getCategoryLabel(c)}</option>`).join('');
+
+            const payers = Array.from(new Set(expenses.map(e => e.payer).filter(Boolean))).sort();
+            payerSel.innerHTML = '<option value="ALL">全部付款</option>' + payers.map(p => `<option value="${p}">${p}</option>`).join('');
         }
 
         function renderExpenses() {
@@ -853,7 +1230,7 @@
                         div.innerHTML = `
                             <div>
                                 <span class="font-bold text-slate-800">${item.title}</span>
-                                <p class="text-[9px] text-slate-400">${item.date} | ${item.payer}</p>
+                                <p class="text-[9px] text-slate-400">${item.date} | 付款: ${item.payer} | 模式: ${item.splitMode === 'payer_excluded' ? '代墊' : '均分'}</p>
                             </div>
                             <div class="flex items-center gap-1.5">
                                 <span class="font-bold text-emerald-600">NT$ ${Number(item.amount).toLocaleString()}</span>
@@ -864,10 +1241,93 @@
                     });
                 }
             }
+
+            renderSettlementSummary(allExpenses);
             renderExpensePieChart(filtered, totalSpent);
         }
 
         window.renderExpenses = renderExpenses;
+
+        function renderSettlementSummary(expenses) {
+            const container = document.getElementById('settlement-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // 計算誰幫誰付了多少錢 (Net balances)
+            let balances = {}; // balances[debtor][creditor] = amount
+            
+            expenses.forEach(ex => {
+                const payer = ex.payer;
+                const amount = Number(ex.amount) || 0;
+                const parts = ex.participants || [];
+                const mode = ex.splitMode || 'normal';
+
+                if (!payer || parts.length === 0) return;
+
+                if (mode === 'payer_excluded') {
+                    // 僅分攤人還款給付款人
+                    const perShare = amount / parts.length;
+                    parts.forEach(p => {
+                        if (p !== payer) {
+                            if (!balances[p]) balances[p] = {};
+                            balances[p][payer] = (balances[p][payer] || 0) + perShare;
+                        }
+                    });
+                } else {
+                    // 均分模式 (包含付款人自身在內)
+                    const totalParts = parts.includes(payer) ? parts.length : parts.length + 1;
+                    const perShare = amount / totalParts;
+                    const allP = parts.includes(payer) ? parts : [...parts, payer];
+
+                    allP.forEach(p => {
+                        if (p !== payer) {
+                            if (!balances[p]) balances[p] = {};
+                            balances[p][payer] = (balances[p][payer] || 0) + perShare;
+                        }
+                    });
+                }
+            });
+
+            // 整理並簡化債務
+            let list = [];
+            Object.keys(balances).forEach(debtor => {
+                Object.keys(balances[debtor]).forEach(creditor => {
+                    let amt = balances[debtor][creditor];
+                    if (amt > 1) {
+                        list.push({ debtor, creditor, amount: Math.round(amt) });
+                    }
+                });
+            });
+
+            if (list.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>`;
+                return;
+            }
+
+            if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
+
+            list.forEach((item, idx) => {
+                const key = `${item.debtor}_to_${item.creditor}`;
+                const isChecked = !!currentTripData.settlementsPaid[key];
+
+                const div = document.createElement('div');
+                div.className = `p-2 rounded-lg border flex items-center justify-between transition ${isChecked ? 'bg-emerald-50/70 border-emerald-200 text-slate-400 line-through' : 'bg-slate-50 border-slate-200 text-slate-800 font-bold'}`;
+                div.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleSettlementPaid('${key}', this.checked)" class="w-4 h-4 rounded text-amber-600 accent-amber-600 cursor-pointer">
+                        <span>${item.debtor} 需支付給 ${item.creditor}</span>
+                    </div>
+                    <span class="text-emerald-700 font-bold">NT$ ${item.amount.toLocaleString()}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.toggleSettlementPaid = function(key, checked) {
+            if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
+            currentTripData.settlementsPaid[key] = checked;
+            saveTripToCloud();
+        };
 
         window.setChartType = function(type) {
             chartType = type;
@@ -884,10 +1344,6 @@
             if (!canvas || !barContainer) return;
             barContainer.innerHTML = '';
 
-            if (!expenseCanvasCtx) {
-                expenseCanvasCtx = canvas.getContext('2d');
-            }
-
             const catTotals = {};
             expenses.forEach(e => {
                 const label = getCategoryLabel(e.category);
@@ -898,42 +1354,34 @@
             const dataVals = Object.values(catTotals);
             const colors = ['#d97706', '#0284c7', '#059669', '#7c3aed', '#db2777', '#0891b2', '#475569'];
 
-            const ctx = expenseCanvasCtx;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            canvas.width = canvas.parentElement.clientWidth || 280;
-            canvas.height = 190;
+            if (expenseChartInstance) {
+                expenseChartInstance.destroy();
+                expenseChartInstance = null;
+            }
 
             if (expenses.length === 0 || total === 0) {
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = '12px Noto Sans TC, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('尚無支出數據', canvas.width / 2, canvas.height / 2);
                 barContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-1">無支出比例資料</p>`;
                 return;
             }
 
-            let startAngle = 0;
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const radius = Math.min(centerX, centerY) - 15;
-
-            dataVals.forEach((val, i) => {
-                const sliceAngle = (val / total) * 2 * Math.PI;
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
-                ctx.closePath();
-                ctx.fillStyle = colors[i % colors.length];
-                ctx.fill();
-                startAngle += sliceAngle;
-            });
-
-            if (chartType === 'doughnut') {
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius * 0.55, 0, 2 * Math.PI);
-                ctx.fillStyle = '#ffffff';
-                ctx.fill();
-            }
+            try {
+                expenseChartInstance = new Chart(canvas, {
+                    type: chartType,
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: dataVals,
+                            backgroundColor: colors.slice(0, labels.length),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            } catch(e) {}
 
             labels.forEach((label, i) => {
                 const amt = catTotals[label];
@@ -953,23 +1401,6 @@
                 `;
                 barContainer.appendChild(row);
             });
-        }
-
-        function populateExpenseFilterOptions() {
-            const expenses = currentTripData.expenses || [];
-            const dateSel = document.getElementById('expense-filter-date');
-            const catSel = document.getElementById('expense-filter-category');
-            const payerSel = document.getElementById('expense-filter-payer');
-            if (!dateSel) return;
-
-            const dates = Array.from(new Set(expenses.map(e => e.date).filter(Boolean))).sort();
-            dateSel.innerHTML = '<option value="ALL">全部日期</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
-
-            const cats = Array.from(new Set([...Object.keys(PRESET_CATEGORIES), ...expenses.map(e => e.category)]));
-            catSel.innerHTML = '<option value="ALL">全部分類</option>' + cats.map(c => `<option value="${c}">${getCategoryLabel(c)}</option>`).join('');
-
-            const payers = Array.from(new Set(expenses.map(e => e.payer).filter(Boolean))).sort();
-            payerSel.innerHTML = '<option value="ALL">全部付款</option>' + payers.map(p => `<option value="${p}">${p}</option>`).join('');
         }
 
         function renderChecklist() {
@@ -1014,54 +1445,6 @@
             const total = (currentTripData.expenses || []).reduce((s, e) => s + Number(e.amount), 0);
             setElText('summary-trip-info', `日期: ${currentTripData.startDate}~${currentTripData.endDate} | 總花費: NT$ ${total.toLocaleString()}`);
         }
-
-        window.goToPage = function(page) {
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            for (let i = 1; i <= totalPages; i++) {
-                const p = document.getElementById(`page-${i}`);
-                const btn = document.getElementById(`nav-btn-${i}`);
-                if (p) p.classList.toggle('hidden', i !== page);
-                if (btn) btn.className = i === page ? "flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600" : "flex flex-col items-center gap-0.5 text-[10px] font-bold text-slate-400";
-            }
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (page === 2) {
-                setTimeout(() => {
-                    if (!leafletMap) {
-                        initLeafletMap();
-                    }
-                    if (leafletMap) {
-                        leafletMap.invalidateSize();
-                        updateLeafletMapMarkers();
-                    }
-                }, 250);
-            }
-            if (page === 3) {
-                renderExpenses();
-            }
-        };
-
-        function setupTouchSwipe() {
-            let startX = 0;
-            const mc = document.getElementById('main-swipe-area');
-            if (!mc) return;
-            mc.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
-            mc.addEventListener('touchend', (e) => {
-                const diff = e.changedTouches[0].clientX - startX;
-                if (diff < -65) goToPage(currentPage + 1);
-                if (diff > 65) goToPage(currentPage - 1);
-            });
-        }
-
-        window.downloadExcelTemplate = function() {
-            const headers = ["天數", "時間", "景點名稱", "地址", "類型", "費用", "備註"];
-            const samples = [[1, "09:30", "關西機場", "關西國際機場", "交通", 1200, "搭車"]];
-            const ws = XLSX.utils.aoa_to_sheet([headers, ...samples]);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "行程");
-            XLSX.writeFile(wb, "行程範本.xlsx");
-            showToast('已下載範本', 'success');
-        };
 
         window.handleExcelFileUpload = function(e) {
             const file = e.target.files[0];
@@ -1209,23 +1592,21 @@
             showToast('行程新增成功', 'success');
         };
 
-        window.deleteItineraryItem = function(id) {
-            currentTripData.itinerary = currentTripData.itinerary.filter(i => i.id !== id);
-            saveTripToCloud();
-            showToast('已刪除', 'info');
-        };
-
         window.handleAddExpense = function(e) {
             e.preventDefault();
             const title = document.getElementById('expense-title').value;
             const amount = Number(document.getElementById('expense-amount').value);
             const date = document.getElementById('expense-date').value;
-            const payer = document.getElementById('expense-payer').value;
+            const payer = document.getElementById('expense-payer').value.trim();
             const cat = document.getElementById('expense-category').value;
-            currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat });
+            const splitMode = document.getElementById('expense-split-mode').value;
+            const partsStr = document.getElementById('expense-participants').value;
+            const participants = partsStr ? partsStr.split(',').map(s => s.trim()).filter(Boolean) : [payer];
+
+            currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat, splitMode, participants });
             saveTripToCloud();
             closeModal('add-expense-modal');
-            showToast('記帳成功', 'success');
+            showToast('記帳與分帳計算完成', 'success');
         };
 
         window.deleteExpenseItem = function(id) {
@@ -1237,15 +1618,16 @@
         window.loadProjectList = async function() {
             const container = document.getElementById('projects-list-container');
             if (!container) return;
-            container.innerHTML = '<p class="text-slate-400 text-center py-2">載入雲端專案中...</p>';
+            container.innerHTML = '<p class="text-slate-400 text-center py-2">載入專案中...</p>';
             
             let pIds = [currentTripId];
             try {
-                if (db && auth && auth.currentUser) {
-                    const uId = auth.currentUser.uid;
-                    const colRef = collection(db, 'artifacts', appId, 'users', uId, 'trips');
-                    const snap = await getDocs(colRef);
-                    snap.forEach(d => { if (!pIds.includes(d.id)) pIds.push(d.id); });
+                if (supabaseClient && currentUser) {
+                    const { data } = await supabaseClient.from('trips').select('id, title').eq('user_id', currentUser.id);
+                    if (data) {
+                        pIds = data.map(d => d.id);
+                        if (!pIds.includes(currentTripId)) pIds.push(currentTripId);
+                    }
                 }
             } catch(e) {}
 
@@ -1276,18 +1658,20 @@
             const btnReg = document.getElementById('tab-register-btn');
             if (loginForm) loginForm.classList.toggle('hidden', tab !== 'login');
             if (regForm) regForm.classList.toggle('hidden', tab !== 'register');
-            if (btnLogin) btnLogin.className = tab === 'login' ? 'flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center' : 'flex-1 pb-1.5 font-bold text-slate-400 text-center';
-            if (btnReg) btnReg.className = tab === 'register' ? 'flex-1 pb-1.5 font-bold text-amber-600 border-b-2 border-amber-600 text-center' : 'flex-1 pb-1.5 font-bold text-slate-400 text-center';
+            if (btnLogin) btnLogin.className = tab === 'login' ? 'flex-1 pb-1 font-bold text-amber-600 border-b-2 border-amber-600 text-center' : 'flex-1 pb-1 font-bold text-slate-400 text-center';
+            if (btnReg) btnReg.className = tab === 'register' ? 'flex-1 pb-1 font-bold text-emerald-600 border-b-2 border-emerald-600 text-center' : 'flex-1 pb-1 font-bold text-slate-400 text-center';
         };
 
         window.handleUserRegister = async function(e) {
             e.preventDefault();
+            if (!supabaseClient) { showToast('請先設定 Supabase URL 與 Key', 'error'); return; }
             const email = document.getElementById('reg-email').value;
             const password = document.getElementById('reg-password').value;
             try {
-                await createUserWithEmailAndPassword(auth, email, password);
-                closeModal('auth-modal');
-                showToast('註冊並登入成功', 'success');
+                const { error } = await supabaseClient.auth.signUp({ email, password });
+                if (error) throw error;
+                showToast('註冊成功！請檢查信箱或直接登入', 'success');
+                switchAuthTab('login');
             } catch(err) {
                 showToast('註冊失敗: ' + err.message, 'error');
             }
@@ -1295,24 +1679,30 @@
 
         window.handleUserLogin = async function(e) {
             e.preventDefault();
+            if (!supabaseClient) { showToast('請先設定 Supabase URL 與 Key', 'error'); return; }
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
             try {
-                await signInWithEmailAndPassword(auth, email, password);
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                currentUser = data.user;
+                updateSyncIndicator();
                 closeModal('auth-modal');
                 showToast('登入成功', 'success');
+                await loadTripFromCloud(currentTripId);
             } catch(err) {
                 showToast('登入失敗: ' + err.message, 'error');
             }
         };
 
         window.handleUserLogout = async function() {
-            try {
-                await signOut(auth);
-                await signInAnonymously(auth);
-                closeModal('auth-modal');
-                showToast('已登出雲端', 'info');
-            } catch(e) {}
+            if (supabaseClient) {
+                await supabaseClient.auth.signOut();
+            }
+            currentUser = null;
+            updateSyncIndicator();
+            closeModal('auth-modal');
+            showToast('已登出', 'info');
         };
 
         window.exportTripJSON = function() {
@@ -1346,15 +1736,17 @@
                 document.getElementById('expense-date').value = currentTripData.startDate;
             }
             if (id === 'auth-modal') {
+                document.getElementById('sb-url-input').value = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || localStorage.getItem('sb_url') || '';
+                document.getElementById('sb-key-input').value = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.key) || localStorage.getItem('sb_key') || '';
                 const loggedPanel = document.getElementById('auth-logged-in-panel');
                 const loginForm = document.getElementById('auth-login-form');
                 const tabHeaders = document.getElementById('auth-tab-headers');
-                const isAuthed = auth && auth.currentUser && !auth.currentUser.isAnonymous;
+                const isAuthed = !!currentUser;
                 if (loggedPanel) loggedPanel.classList.toggle('hidden', !isAuthed);
                 if (loginForm) loginForm.classList.toggle('hidden', isAuthed);
                 if (tabHeaders) tabHeaders.classList.toggle('hidden', isAuthed);
                 if (isAuthed) {
-                    setElText('logged-user-display', auth.currentUser.email);
+                    setElText('logged-user-display', currentUser.email);
                 }
             }
             if (id === 'project-modal') loadProjectList();

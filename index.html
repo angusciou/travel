@@ -1912,6 +1912,7 @@
                     item.expensePayer = expPayer;
                     item.expenseSplitMode = expSplitMode;
                     item.expenseParticipants = expParticipants;
+                    item.syncDismissed = cost > 0 && !linkExpense;
 
                     if (cost > 0 && linkExpense) {
                         if (item.linkedExpenseId) {
@@ -1961,6 +1962,7 @@
                 currentTripData.itinerary.push({
                     id: newEvId, day, time, title, address, type, cost, notes: '',
                     linkedExpenseId: linkedExId,
+                    syncDismissed: cost > 0 && !linkExpense,
                     expensePayer: expPayer,
                     expenseSplitMode: expSplitMode,
                     expenseParticipants: expParticipants
@@ -2050,7 +2052,7 @@
         window.deleteExpenseItem = function(id) {
             currentTripData.expenses = (currentTripData.expenses || []).filter(e => e.id !== id);
             (currentTripData.itinerary || []).forEach(it => {
-                if (it.linkedExpenseId === id) delete it.linkedExpenseId;
+                if (it.linkedExpenseId === id) { delete it.linkedExpenseId; it.syncDismissed = true; }
             });
             saveTripToCloud();
             showToast('已刪除', 'info');
@@ -2396,7 +2398,7 @@
     (currentTripData.itinerary || []).forEach(it => {
       if (!it.linkedExpenseId) return;
       const ex = (currentTripData.expenses || []).find(x => x.id === it.linkedExpenseId);
-      if (ex) { it.cost = Number(ex.amount); it.title = ex.title; } else delete it.linkedExpenseId;
+      if (ex) { it.cost = Number(ex.amount); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
     });
     if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
       store.remove('local_trip_default_trip');
@@ -2925,6 +2927,112 @@
   // 選同一個 Excel 檔案第二次時，瀏覽器不會觸發 change；讀取後清空即可重選
   const _excelUp = window.handleExcelFileUpload;
   window.handleExcelFileUpload = function (e) { const input = e.target; _excelUp(e); input.value = ''; };
+
+  /* ============ 15. 行程花費 → 記帳同步（行程裡有花費、但尚未建立記帳項目的，可一次補同步） ============ */
+  const unsyncedItems = () => (currentTripData.itinerary || []).filter(it => Number(it.cost) > 0 && !it.linkedExpenseId && !it.syncDismissed);
+  const itemDate = it => { const d = new Date(currentTripData.startDate); if (isNaN(d)) return ''; d.setUTCDate(d.getUTCDate() + (Number(it.day) || 1) - 1); return d.toISOString().split('T')[0]; };
+  const TYPE_TO_CAT = { sightseeing: 'tickets', food: 'food', transport: 'transport', hotel: 'hotel', shopping: 'shopping' };
+
+  // 花費頁上方的提示條
+  function ensureSyncBanner() {
+    let b = $('itin-sync-banner');
+    if (!b) {
+      const header = document.querySelector('#page-3 > div');            // 頁面標題列
+      if (!header) return null;
+      b = document.createElement('div'); b.id = 'itin-sync-banner';
+      b.className = 'hidden bg-amber-50 border border-amber-300 rounded-xl p-2.5 text-[11px] flex items-center justify-between gap-2';
+      header.parentNode.insertBefore(b, header.nextSibling);
+    }
+    return b;
+  }
+  function updateSyncBanner() {
+    const b = ensureSyncBanner(); if (!b) return;
+    const n = unsyncedItems().length;
+    b.classList.toggle('hidden', n === 0);
+    if (!n) { b.innerHTML = ''; return; }
+    b.innerHTML = `<span class="text-amber-900">行程中有 <b>${n}</b> 筆花費還沒建立記帳項目，所以不會出現在下方的明細、篩選選單與分帳結算。</span>`;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'flex-shrink-0 bg-amber-600 text-white font-bold px-2.5 py-1 rounded-lg shadow-sm';
+    btn.textContent = '同步到記帳'; btn.onclick = () => openSyncItineraryModal();
+    b.appendChild(btn);
+  }
+  const _renderExpenses2 = window.renderExpenses;
+  window.renderExpenses = function () { _renderExpenses2(); updateSyncBanner(); };
+
+  // 同步視窗
+  function ensureSyncModal() {
+    if ($('sync-itin-modal')) return;
+    const m = document.createElement('div');
+    m.id = 'sync-itin-modal';
+    m.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden';
+    m.innerHTML = `
+      <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs max-h-[90vh] overflow-y-auto space-y-2.5">
+        <button type="button" onclick="closeModal('sync-itin-modal')" class="absolute top-3 right-3 text-slate-400 text-base">✕</button>
+        <h3 class="font-bold text-slate-900 text-sm">把行程花費同步到記帳</h3>
+        <p class="text-slate-500 text-[11px]">勾選要建立記帳項目的行程。同一批使用相同的付款人與分攤方式；之後可在花費頁個別修改。<b class="text-amber-700">若某筆已經在記帳手動輸入過，請取消勾選，以免重複計算。</b></p>
+        <div id="sync-itin-list" class="space-y-1 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-1.5 bg-slate-50"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block font-bold text-slate-700 mb-1">實際付款人</label><input id="sync-itin-payer" type="text" placeholder="例: 小明" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+          <div><label class="block font-bold text-slate-700 mb-1">分帳模式</label>
+            <select id="sync-itin-mode" class="w-full border border-slate-200 rounded p-1.5 outline-none bg-slate-50"><option value="normal">均分模式</option><option value="payer_excluded">代墊模式(不含付款人)</option></select></div>
+        </div>
+        <div><label class="block font-bold text-slate-700 mb-1">參與分攤成員 (逗號分隔)</label><input id="sync-itin-parts" type="text" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+        <button type="button" id="sync-itin-confirm" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-sm">建立記帳並同步</button>
+      </div>`;
+    document.body.appendChild(m);
+    $('sync-itin-confirm').onclick = confirmSyncItinerary;
+  }
+  window.openSyncItineraryModal = function () {
+    const items = unsyncedItems();
+    if (!items.length) { showToast('所有行程花費都已同步到記帳', 'info'); return; }
+    ensureSyncModal();
+    $('sync-itin-list').innerHTML = items.map(it => `
+      <label class="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded p-1.5 cursor-pointer">
+        <span class="flex items-center gap-1.5 min-w-0"><input type="checkbox" data-id="${esc(it.id)}" checked class="w-4 h-4 accent-emerald-600 flex-shrink-0">
+          <span class="truncate">Day ${esc(it.day)} ${esc(it.time)} ${esc(it.title)}</span></span>
+        <span class="font-bold text-emerald-700 whitespace-nowrap">NT$ ${Number(it.cost).toLocaleString()}</span></label>`).join('');
+    if (!$('sync-itin-parts').value) $('sync-itin-parts').value = knownPeople();
+    $('sync-itin-modal').classList.remove('hidden');
+  };
+  function confirmSyncItinerary() {
+    const payer = $('sync-itin-payer').value.trim(), parts = $('sync-itin-parts').value.split(',').map(x => x.trim()).filter(Boolean);
+    if (!payer) { showToast('請填寫實際付款人', 'error'); $('sync-itin-payer').focus(); return; }
+    if (!parts.length) { showToast('請填寫參與分攤成員', 'error'); $('sync-itin-parts').focus(); return; }
+    const ids = new Set([...$('sync-itin-list').querySelectorAll('input:checked')].map(i => i.dataset.id));
+    if (!ids.size) { showToast('請至少勾選一筆行程', 'error'); return; }
+    if (!Array.isArray(currentTripData.expenses)) currentTripData.expenses = [];
+    const mode = $('sync-itin-mode').value; let n = 0;
+    (currentTripData.itinerary || []).forEach((it, idx) => {
+      if (!ids.has(String(it.id)) || it.linkedExpenseId || !(Number(it.cost) > 0)) return;
+      const exId = 'ex_' + Date.now() + '_' + idx;
+      currentTripData.expenses.push({ id: exId, title: it.title, amount: Number(it.cost), date: itemDate(it) || currentTripData.startDate,
+        payer, category: TYPE_TO_CAT[it.type] || 'other', splitMode: mode, participants: parts });
+      it.linkedExpenseId = exId; it.expensePayer = payer; it.expenseSplitMode = mode; it.expenseParticipants = parts; delete it.syncDismissed;
+      n++;
+    });
+    $('sync-itin-modal').classList.add('hidden'); $('sync-itin-payer').value = '';
+    saveTripToCloud();
+    showToast(`已同步 ${n} 筆行程花費到記帳`, 'success');
+  }
+
+  // 編輯尚未連動記帳的行程時，預設勾選「同步建立記帳」（原本預設不勾，容易漏掉）
+  const _editItin = window.editItineraryItem;
+  window.editItineraryItem = function (id) {
+    _editItin(id);
+    const it = (currentTripData.itinerary || []).find(x => x.id === id);
+    if (it && !it.linkedExpenseId) {
+      $('event-link-expense').checked = true;
+      if (!$('event-expense-participants').value.trim()) $('event-expense-participants').value = knownPeople();
+    }
+  };
+
+  // Excel 匯入含花費的行程時提醒可同步
+  const _applyExcel = window.applyExcelDataToItinerary;
+  window.applyExcelDataToItinerary = function () {
+    const withCost = (parsedExcelEvents || []).filter(e => Number(e.cost) > 0).length;
+    _applyExcel();
+    if (withCost) showToast(`有 ${withCost} 筆行程含花費，可到「花費」頁按「同步到記帳」`, 'info');
+  };
 })();
 </script>
 

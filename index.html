@@ -699,7 +699,70 @@
     <script>
         let supabaseClient = null;
         let currentUser = null;
-        let currentTripId = localStorage.getItem('last_trip_id') || 'default_trip';
+
+        // ===== 本機資料依帳號隔離：未登入 = guest，登入後 = u_<使用者ID>。不同帳號互相看不到對方的快取資料 =====
+        const store = {
+            ns() { return (currentUser ? 'u_' + currentUser.id : 'guest') + ':'; },
+            get(k) { return localStorage.getItem(this.ns() + k); },
+            set(k, v) { localStorage.setItem(this.ns() + k, v); },
+            remove(k) { localStorage.removeItem(this.ns() + k); },
+            keys(prefix) {
+                const p = this.ns(), out = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(p + prefix)) out.push(k.slice(p.length));
+                }
+                return out;
+            },
+            // 登出或切換帳號時清掉該帳號在本機的快取；尚未同步到雲端的專案保留，避免遺失
+            purgeSynced(uid) {
+                const p = 'u_' + uid + ':', del = [], keep = new Set();
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k || !k.startsWith(p)) continue;
+                    if (k.startsWith(p + 'unsynced_')) keep.add(p + 'local_trip_' + k.slice((p + 'unsynced_').length));
+                }
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(p) && !keep.has(k) && !k.startsWith(p + 'unsynced_')) del.push(k);
+                }
+                del.forEach(k => localStorage.removeItem(k));
+            }
+        };
+        // 舊版沒有帳號前綴的資料，一律視為「未登入（guest）」資料
+        (function migrateLegacyKeys() {
+            const legacy = /^(local_trip_|unsynced_|last_trip_id$|trips_ever_saved$|home_custom_bg$)/;
+            const move = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && !k.includes(':') && legacy.test(k)) move.push(k);
+            }
+            move.forEach(k => { localStorage.setItem('guest:' + k, localStorage.getItem(k)); localStorage.removeItem(k); });
+        })();
+        const normEmail = e => String(e || '').trim().toLowerCase();
+        // 這筆雲端資料這個帳號是否有權看到：自己建立的，或被列入共編名單
+        function canSeeRow(row) {
+            if (!currentUser || !row) return false;
+            if (row.user_id === currentUser.id) return true;
+            const me = normEmail(currentUser.email);
+            return !!me && ((row.data && row.data.collaborators) || []).map(normEmail).includes(me);
+        }
+        function resetStateForAccount() {
+            currentTripId = store.get('last_trip_id') || 'default_trip';
+            currentTripData = getInitialTripData();
+            activeDayTab = 1;
+        }
+        // 帳號有變動（登入、登出、其他分頁切換帳號）時，統一在這裡切換狀態
+        function applyAccountChange(newUser) {
+            const oldId = currentUser ? currentUser.id : null, newId = newUser ? newUser.id : null;
+            if (oldId === newId) return false;
+            if (oldId) store.purgeSynced(oldId);
+            currentUser = newUser || null;
+            resetStateForAccount();
+            updateSyncIndicator();
+            return true;
+        }
+        let currentTripId = store.get('last_trip_id') || 'default_trip';
         let currentTripData = getInitialTripData();
         let currentPage = 1;
         const totalPages = 5;
@@ -741,6 +804,10 @@
             if (url && key && window.supabase) {
                 try {
                     supabaseClient = window.supabase.createClient(url, key);
+                    supabaseClient.auth.onAuthStateChange((event, session) => {
+                        if (event === 'INITIAL_SESSION') return;
+                        if (applyAccountChange(session && session.user ? session.user : null)) goHomeLanding();
+                    });
                 } catch(e) {}
             }
         }
@@ -749,8 +816,7 @@
             if (!supabaseClient) return;
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
-                currentUser = session?.user || null;
-                updateSyncIndicator();
+                applyAccountChange(session?.user || null);
                 if (currentUser) {
                     await fetchAllCloudTrips();
                     await loadTripFromCloud(currentTripId);
@@ -766,7 +832,7 @@
                     data.forEach(row => {
                         if (row.data) {
                             const dat = row.data;
-                            localStorage.setItem('local_trip_' + dat.id, JSON.stringify(dat));
+                            store.set('local_trip_' + dat.id, JSON.stringify(dat));
                         }
                     });
                 }
@@ -851,7 +917,7 @@
 
         async function saveTripToCloud() {
             try {
-                localStorage.setItem('local_trip_' + currentTripId, JSON.stringify(currentTripData));
+                store.set('local_trip_' + currentTripId, JSON.stringify(currentTripData));
                 if (supabaseClient && currentUser) {
                     await supabaseClient.from('trips').upsert({
                         id: currentTripId,
@@ -870,20 +936,20 @@
 
         async function loadTripFromCloud(tId) {
             currentTripId = tId;
-            localStorage.setItem('last_trip_id', currentTripId);
+            store.set('last_trip_id', currentTripId);
             try {
                 if (supabaseClient && currentUser) {
                     const { data } = await supabaseClient.from('trips').select('data').eq('id', tId).single();
                     if (data && data.data) {
                         currentTripData = data.data;
-                        localStorage.setItem('local_trip_' + tId, JSON.stringify(currentTripData));
+                        store.set('local_trip_' + tId, JSON.stringify(currentTripData));
                         renderTripData();
                         return;
                     }
                 }
             } catch(e) {}
 
-            const local = localStorage.getItem('local_trip_' + currentTripId);
+            const local = store.get('local_trip_' + currentTripId);
             if (local) {
                 try {
                     currentTripData = JSON.parse(local);
@@ -905,7 +971,7 @@
             const catList = document.getElementById('page-category-list');
             if (home) {
                 home.classList.remove('hidden');
-                const savedBg = localStorage.getItem('home_custom_bg') || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80';
+                const savedBg = store.get('home_custom_bg') || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80';
                 home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${savedBg}')`;
             }
             if (catList) catList.classList.add('hidden');
@@ -950,7 +1016,7 @@
                 return;
             }
             bg = bg.replace(/['"()\s]/g, c => encodeURIComponent(c));
-            try { localStorage.setItem('home_custom_bg', bg); }
+            try { store.set('home_custom_bg', bg); }
             catch (err) { showToast('圖片太大，無法儲存（請改用較小的圖片或網址）', 'error'); return; }
             const home = document.getElementById('page-home');
             if (home) {
@@ -961,7 +1027,7 @@
         };
 
         window.resetHomeBackground = function() {
-            localStorage.removeItem('home_custom_bg');
+            store.remove('home_custom_bg');
             const home = document.getElementById('page-home');
             if (home) {
                 home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80')`;
@@ -975,15 +1041,9 @@
                 await fetchAllCloudTrips();
             }
             let mapTrips = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith('local_trip_')) {
-                    try {
-                        const dat = JSON.parse(localStorage.getItem(k));
-                        if (dat && dat.id) mapTrips[dat.id] = dat;
-                    } catch(e){}
-                }
-            }
+            store.keys('local_trip_').forEach(k => {
+                try { const dat = JSON.parse(store.get(k)); if (dat && dat.id) mapTrips[dat.id] = dat; } catch(e){}
+            });
             if (Object.keys(mapTrips).length === 0) {
                 mapTrips[currentTripId] = currentTripData;
             }
@@ -1060,7 +1120,7 @@
             event.stopPropagation();
             if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
 
-            localStorage.removeItem('local_trip_' + id);
+            store.remove('local_trip_' + id);
             
             try {
                 if (supabaseClient && currentUser) {
@@ -1990,17 +2050,9 @@
             }
 
             let pMap = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith('local_trip_')) {
-                    try {
-                        const dat = JSON.parse(localStorage.getItem(k));
-                        if (dat && dat.id) {
-                            pMap[dat.id] = dat.title;
-                        }
-                    } catch(e){}
-                }
-            }
+            store.keys('local_trip_').forEach(k => {
+                try { const dat = JSON.parse(store.get(k)); if (dat && dat.id) pMap[dat.id] = dat.title; } catch(e){}
+            });
 
             if (!pMap[currentTripId]) pMap[currentTripId] = currentTripData.title;
 
@@ -2058,8 +2110,8 @@
             try {
                 const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-                currentUser = data.user;
-                updateSyncIndicator();
+                applyAccountChange(data.user);
+                await offerGuestImport();
                 closeModal('auth-modal');
                 showToast('登入成功', 'success');
                 await fetchAllCloudTrips();
@@ -2074,8 +2126,7 @@
             if (supabaseClient) {
                 await supabaseClient.auth.signOut();
             }
-            currentUser = null;
-            updateSyncIndicator();
+            applyAccountChange(null);
             closeModal('auth-modal');
             showToast('已登出', 'info');
             goHomeLanding();
@@ -2292,13 +2343,20 @@
     try {
       const owner = trip.ownerId || currentUser.id;
       trip.ownerId = owner;
-      const { error } = await supabaseClient.from('trips').upsert({ id, user_id: owner, title: trip.title, data: trip, updated_at: new Date().toISOString() });
-      if (error) throw error;
-      localStorage.removeItem('unsynced_' + id);
+      const now = new Date().toISOString();
+      if (owner === currentUser.id) {
+        const { error } = await supabaseClient.from('trips').upsert({ id, user_id: owner, title: trip.title, data: trip, updated_at: now });
+        if (error) throw error;
+      } else {                                                    // 共編者：只能更新，不能新增或改擁有者
+        const { data, error } = await supabaseClient.from('trips').update({ title: trip.title, data: trip, updated_at: now }).eq('id', id).select('id');
+        if (error) throw error;
+        if (!data || !data.length) throw new Error('沒有寫入權限（可能已被移出共編名單）');
+      }
+      store.remove('unsynced_' + id);
       return true;
     } catch (e) {
       console.error(e);
-      localStorage.setItem('unsynced_' + id, '1');
+      store.set('unsynced_' + id, '1');
       showToast('雲端同步失敗，資料已存本機：' + (e.message || ''), 'error');
       return false;
     }
@@ -2313,58 +2371,96 @@
       if (ex) { it.cost = Number(ex.amount); it.title = ex.title; } else delete it.linkedExpenseId;
     });
     if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
-      localStorage.removeItem('local_trip_default_trip');
+      store.remove('local_trip_default_trip');
       currentTripId = 'trip_' + Math.random().toString(36).slice(2, 10);
       currentTripData.id = currentTripId;
-      localStorage.setItem('last_trip_id', currentTripId);
+      store.set('last_trip_id', currentTripId);
     }
     const id = currentTripId, trip = currentTripData;
     try {
-      localStorage.setItem('local_trip_' + id, JSON.stringify(trip));
-      localStorage.setItem('trips_ever_saved', '1');
+      store.set('local_trip_' + id, JSON.stringify(trip));
+      store.set('trips_ever_saved', '1');
     } catch (e) { showToast('本機儲存失敗（圖片可能過大）', 'error'); }
     renderTripData();                                            // 先更新畫面，不等網路
     if (supabaseClient && currentUser) {
+      store.set('unsynced_' + id, '1');                           // 送出前先標記；成功後才清除（避免同步途中被清除快取）
       if (await pushTrip(id, trip)) showToast('已同步至 Supabase 雲端共編', 'success');
     } else showToast('已儲存至本機', 'info');
   };
 
+  let lastFetchAt = 0, lastFetchUser = null;
   window.fetchAllCloudTrips = async function () {
     if (!(supabaseClient && currentUser)) return;
+    if (lastFetchUser === currentUser.id && Date.now() - lastFetchAt < 2000) return;
+    lastFetchAt = Date.now(); lastFetchUser = currentUser.id;
     try {
       const { data, error } = await supabaseClient.from('trips').select('*');
-      if (!error && data) data.forEach(row => {
-        if (row.data && row.data.id && !localStorage.getItem('unsynced_' + row.data.id)) {
-          row.data.ownerId = row.user_id;
-          localStorage.setItem('local_trip_' + row.data.id, JSON.stringify(row.data));
-        }
+      if (error) throw error;
+      const ids = new Set();
+      (data || []).filter(canSeeRow).forEach(row => {            // 只保留「自己建立」或「被列入共編」的專案
+        const t = row.data; if (!t || !t.id) return;
+        ids.add(t.id);
+        if (!store.get('unsynced_' + t.id)) { t.ownerId = row.user_id; store.set('local_trip_' + t.id, JSON.stringify(t)); }
+      });
+      store.keys('local_trip_').forEach(k => {                    // 雲端已不存在或已無權限的專案，從本機快取移除（未同步的保留）
+        const id = k.slice('local_trip_'.length);
+        if (!ids.has(id) && !store.get('unsynced_' + id)) store.remove(k);
       });
     } catch (e) { console.error(e); }
-    for (let i = 0; i < localStorage.length; i++) {              // 補送先前同步失敗的資料
-      const k = localStorage.key(i);
-      if (k && k.startsWith('unsynced_')) {
-        const id = k.slice(9), raw = localStorage.getItem('local_trip_' + id);
-        if (raw) { try { await pushTrip(id, JSON.parse(raw)); } catch (e) {} }
-      }
+    for (const k of store.keys('unsynced_')) {                    // 補送先前同步失敗的資料
+      const id = k.slice('unsynced_'.length), raw = store.get('local_trip_' + id);
+      if (raw) { try { await pushTrip(id, JSON.parse(raw)); } catch (e) {} } else store.remove(k);
     }
   };
 
   window.loadTripFromCloud = async function (tId) {
     currentTripId = tId;
-    localStorage.setItem('last_trip_id', tId);
-    const local = localStorage.getItem('local_trip_' + tId);
+    store.set('last_trip_id', tId);
+    const local = store.get('local_trip_' + tId);
+    let answered = false;
     try {
-      if (supabaseClient && currentUser && !(local && localStorage.getItem('unsynced_' + tId))) {
-        const { data } = await supabaseClient.from('trips').select('data,user_id').eq('id', tId).maybeSingle();
-        if (data && data.data) {
-          currentTripData = data.data; currentTripData.ownerId = data.user_id;
-          localStorage.setItem('local_trip_' + tId, JSON.stringify(currentTripData));
-          renderTripData(); return;
+      if (supabaseClient && currentUser && !(local && store.get('unsynced_' + tId))) {
+        const { data, error } = await supabaseClient.from('trips').select('data,user_id').eq('id', tId).maybeSingle();
+        if (!error) {
+          answered = true;
+          if (data && data.data && canSeeRow(data)) {
+            currentTripData = data.data; currentTripData.ownerId = data.user_id;
+            store.set('local_trip_' + tId, JSON.stringify(currentTripData));
+            renderTripData(); return;
+          }
         }
       }
     } catch (e) { console.error(e); }
-    try { currentTripData = local ? JSON.parse(local) : getInitialTripData(); } catch (e) { currentTripData = getInitialTripData(); }
+    // 雲端明確回覆「看不到這筆」時，不可退回使用本機舊快取（除非是尚未同步的自己的資料）
+    const useLocal = local && (!answered || store.get('unsynced_' + tId));
+    try { currentTripData = useLocal ? JSON.parse(local) : getInitialTripData(); } catch (e) { currentTripData = getInitialTripData(); }
+    if (!useLocal && tId !== 'default_trip') {
+      currentTripId = 'default_trip'; store.remove('last_trip_id');
+      currentTripData = getInitialTripData();
+      showToast('找不到此專案，可能尚未登入或沒有存取權限', 'error');
+    }
     renderTripData();
+  };
+
+  // 登入時，若這台裝置有「未登入時」建立的專案，詢問是否匯入此帳號（每個帳號只問一次）
+  window.offerGuestImport = async function () {
+    if (!currentUser) return;
+    const askedKey = 'asked_guest_import_' + currentUser.id;
+    const gKeys = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('guest:local_trip_')) gKeys.push(k); }
+    if (!gKeys.length || localStorage.getItem(askedKey)) return;
+    localStorage.setItem(askedKey, '1');
+    if (!confirm(`這台裝置上有 ${gKeys.length} 個「未登入時」建立的專案。\n要匯入目前登入的帳號嗎？\n（按「取消」會繼續保留在未登入狀態，這個帳號看不到）`)) return;
+    gKeys.forEach(k => {
+      try {
+        const t = JSON.parse(localStorage.getItem(k)); if (!t || !t.id) return;
+        delete t.ownerId;
+        store.set('local_trip_' + t.id, JSON.stringify(t));
+        store.set('unsynced_' + t.id, '1');                      // 之後會自動上傳到這個帳號
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+    showToast('已匯入未登入時的專案', 'success');
   };
 
   const _showToast = window.showToast;
@@ -2379,11 +2475,8 @@
   window.getAllLocalAndCloudTrips = async function () {
     if (supabaseClient && currentUser) await fetchAllCloudTrips();
     const m = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('local_trip_')) { try { const d = JSON.parse(localStorage.getItem(k)); if (d && d.id) m[d.id] = d; } catch (e) {} }
-    }
-    if (!Object.keys(m).length && !localStorage.getItem('trips_ever_saved')) m[currentTripId] = currentTripData;  // 只在全新使用者顯示範例
+    store.keys('local_trip_').forEach(k => { try { const d = JSON.parse(store.get(k)); if (d && d.id) m[d.id] = d; } catch (e) {} });
+    if (!Object.keys(m).length && !currentUser && !store.get('trips_ever_saved')) m[currentTripId] = currentTripData;  // 只在全新使用者顯示範例
     return Object.values(m);
   };
   window.updateLandingCounts = async function () {
@@ -2414,10 +2507,19 @@
       if (!b || !row) return;
       const id = row.dataset.id;
       if (b.dataset.act === 'open') return openTripById(id);
+      let tr = null; try { tr = JSON.parse(store.get('local_trip_' + id)); } catch (err) {}
+      if (currentUser && tr && tr.ownerId && tr.ownerId !== currentUser.id) {      // 共編專案只有擁有者能刪除
+        showToast('這是別人分享給你的共編專案，只有擁有者可以刪除', 'error'); return;
+      }
       if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
-      localStorage.removeItem('local_trip_' + id);
-      try { if (supabaseClient && currentUser) await supabaseClient.from('trips').delete().eq('id', id); } catch (err) {}
-      if (id === currentTripId) { currentTripId = 'default_trip'; currentTripData = getInitialTripData(); localStorage.removeItem('last_trip_id'); }
+      store.remove('local_trip_' + id);
+      try {
+        if (supabaseClient && currentUser) {
+          const { error } = await supabaseClient.from('trips').delete().eq('id', id);
+          if (error) throw error;
+        }
+      } catch (err) { showToast('雲端刪除失敗（可能沒有權限），重新同步後專案可能會再出現：' + (err.message || ''), 'error'); }
+      if (id === currentTripId) { currentTripId = 'default_trip'; currentTripData = getInitialTripData(); store.remove('last_trip_id'); }
       showToast('專案已刪除', 'info');
       openLandingCategory(lastCategory);
     };
@@ -2667,6 +2769,7 @@
   // 日期檢查：結束日不可早於開始日
   const _saveTrip = window.handleSaveTripDetails;
   window.handleSaveTripDetails = function (e) {
+    $('input-trip-collaborators').value = $('input-trip-collaborators').value.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).join(', ');
     if ($('input-trip-end').value < $('input-trip-start').value) { e.preventDefault(); showToast('結束日期不可早於開始日期', 'error'); return; }
     _saveTrip(e);
   };
@@ -2675,6 +2778,79 @@
     if ($('new-trip-end').value < $('new-trip-start').value) { e.preventDefault(); showToast('結束日期不可早於開始日期', 'error'); return; }
     _createTrip(e);
   };
+
+  /* ============ 12. 導航：開啟外部地圖 App（Google 地圖＋Apple 地圖；不需金鑰、不計費、不受 API 限流影響） ============ */
+  // 手機若已安裝對應 App 會直接開啟 App，否則開啟網頁版。Apple 地圖按鈕只在 Apple 裝置（iPhone / iPad / Mac）顯示。
+  const isApple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) || /Mac|iPhone|iPad/.test(navigator.platform || '');
+  const navQuery = it => (it.address && it.title && !it.address.includes(it.title)) ? `${it.title} ${it.address}` : (it.address || it.title || '');
+  const enc = encodeURIComponent;
+  const googleUrl = (dest, origin, waypoints) =>
+    'https://www.google.com/maps/dir/?api=1&destination=' + enc(dest) +
+    (origin ? '&origin=' + enc(origin) : '') +
+    (waypoints && waypoints.length ? '&waypoints=' + waypoints.map(enc).join('%7C') : '');
+  // Apple 官方文件只定義 saddr / daddr / dirflg（單一起訖點）；多站路線是 iOS 16 之後的實務用法：重複帶多個 daddr
+  const appleUrl = (dest, origin) => 'https://maps.apple.com/?' + (origin ? 'saddr=' + enc(origin) + '&' : '') + 'daddr=' + enc(dest);
+  const appleRouteUrl = qs => 'https://maps.apple.com/?saddr=' + enc(qs[0]) + qs.slice(1).map(q => '&daddr=' + enc(q)).join('');
+  const BTN = 'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap border ';
+  const G_CLS = BTN + 'bg-sky-50 text-sky-700 border-sky-200';
+  const A_CLS = BTN + 'bg-slate-100 text-slate-700 border-slate-300';
+
+  function mkLink(href, text, cls, title) {
+    const a = document.createElement('a');
+    a.dataset.act = 'nav'; a.className = cls; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.href = href; a.textContent = text; if (title) a.title = title;
+    a.onclick = e => e.stopPropagation();                         // 不觸發「編輯行程」
+    return a;
+  }
+
+  function decorateNav() {
+    const box = $('itinerary-timeline'); if (!box) return;
+    const evs = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    // 每個行程項目旁：從目前位置導航到該地點
+    box.querySelectorAll('[data-id]').forEach(row => {
+      const it = evs.find(x => String(x.id) === row.dataset.id);
+      if (!it || !it.address || row.querySelector('a[data-act="nav"]')) return;
+      const q = navQuery(it), del = row.querySelector('[data-act="del"]');
+      if (!del) return;
+      del.parentNode.insertBefore(mkLink(googleUrl(q), '🧭 Google', G_CLS, '用 Google 地圖導航到這裡'), del);
+      if (isApple) del.parentNode.insertBefore(mkLink(appleUrl(q), '🧭 Apple', A_CLS, '用 Apple 地圖導航到這裡'), del);
+    });
+    // 當天全程路線：第一站 → 中間各站 → 最後一站
+    let bar = $('day-route-bar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'day-route-bar'; box.parentNode.insertBefore(bar, box); }
+    bar.innerHTML = '';
+    const stops = evs.filter(e => e.address);
+    if (stops.length < 2) return;
+    const used = stops.slice(0, 11), q = used.map(navQuery);               // Google 最多 起點＋9 個中途點＋終點
+    const row = document.createElement('div'); row.className = 'flex gap-2';
+    const mk = (href, text, cls) => { const a = mkLink(href, text, cls); a.className = cls; return a; };
+    row.appendChild(mk(googleUrl(q[q.length - 1], q[0], q.slice(1, -1)), `🧭 Google 地圖 Day ${activeDayTab} 全程（${used.length} 站）`, 'flex-1 text-center bg-sky-600 text-white rounded-xl py-2 text-xs font-bold shadow-sm'));
+    if (isApple) row.appendChild(mk(appleRouteUrl(q), `🧭 Apple 地圖 Day ${activeDayTab} 全程`, 'flex-1 text-center bg-slate-800 text-white rounded-xl py-2 text-xs font-bold shadow-sm'));
+    bar.appendChild(row);
+    const note = [];
+    if (stops.length > used.length) note.push(`路線最多帶入前 ${used.length} 站，其餘請用各項目旁的導航。`);
+    if (isApple) note.push('Apple 地圖多站路線需 iOS 16 以上；若只顯示第一段，請改用各項目旁的導航。');
+    if (note.length) { const n = document.createElement('p'); n.className = 'text-[10px] text-slate-400 text-center mt-1'; n.textContent = note.join(' '); bar.appendChild(n); }
+  }
+  const _renderTimeline = window.renderItineraryTimeline;
+  window.renderItineraryTimeline = function () { _renderTimeline(); decorateNav(); };
+  try { renderItineraryTimeline(); } catch (e) { console.error(e); }
+
+  /* ============ 13. 複製共編分享連結（?trip=專案ID） ============ */
+  (function () {
+    const holder = $('cover-collaborators'); if (!holder || $('btn-copy-share')) return;
+    const btn = document.createElement('button');
+    btn.id = 'btn-copy-share'; btn.type = 'button';
+    btn.className = 'mt-1 text-[11px] font-bold text-indigo-700 underline';
+    btn.textContent = '複製專案分享連結';
+    btn.onclick = async e => {
+      e.stopPropagation();
+      const url = location.origin + location.pathname + '?trip=' + encodeURIComponent(currentTripId);
+      try { await navigator.clipboard.writeText(url); showToast('已複製連結（對方需登入且被授權才能開啟）', 'success'); }
+      catch (err) { prompt('請手動複製連結：', url); }
+    };
+    holder.parentNode.appendChild(btn);
+  })();
 })();
 </script>
 

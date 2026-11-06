@@ -88,7 +88,7 @@
 
 <body class="h-full bg-slate-50 text-slate-800 flex flex-col justify-between overflow-x-hidden">
     
-    <!-- 頂部導航列 -->
+    <!-- 頂部導覽列 -->
     <header class="relative z-30 bg-white border-b border-slate-200 px-3 py-2.5 text-slate-800 flex items-center justify-between shadow-sm flex-shrink-0">
         <div class="flex items-center space-x-2 min-w-0 cursor-pointer" onclick="goHomeLanding()">
             <div class="bg-amber-500 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
@@ -119,7 +119,7 @@
         <div class="flex-1 flex flex-col pb-4">
             
             <!-- 0. 迎賓首頁 (Landing Page) -->
-            <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80');">
+            <div id="page-home" class="space-y-4 py-4 relative rounded-2xl p-4 overflow-hidden bg-cover bg-center shadow-md transition-all duration-500" style="background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80');">
                 <div class="absolute top-3 right-3 z-10 flex gap-1.5">
                     <button onclick="openModal('edit-home-bg-modal')" class="bg-black/40 hover:bg-black/60 text-white text-[10px] px-2.5 py-1 rounded-lg backdrop-blur-sm transition flex items-center gap-1 shadow-sm">
                         <i class="fa-solid fa-image"></i> 自訂背景
@@ -201,7 +201,7 @@
             <!-- 第 1 頁：封面與基本資料 -->
             <div id="page-1" class="space-y-3 page-panel hidden">
                 <div class="relative h-44 rounded-2xl overflow-hidden shadow-sm bg-slate-200 border border-slate-200">
-                    <img id="cover-photo" src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
+                    <img id="cover-photo" src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
                         <div class="text-white">
                             <span class="text-[9px] uppercase tracking-widest bg-amber-500 font-bold px-1.5 py-0.5 rounded text-white">Travel Book</span>
@@ -259,7 +259,7 @@
                     <div class="flex gap-1.5">
                         <button onclick="downloadExcelTemplate()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-2 py-1 rounded font-medium">範本</button>
                         <button onclick="openModal('excel-modal')" class="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded font-medium">匯入</button>
-                        <button onclick="openModal('add-event-modal')" class="bg-amber-600 text-white text-[10px] px-2 py-1 rounded font-medium"><i class="fa-solid fa-plus"></i></button>
+                        <button onclick="openAddEventModal()" class="bg-amber-600 text-white text-[10px] px-2 py-1 rounded font-medium"><i class="fa-solid fa-plus"></i> 新增</button>
                     </div>
                 </div>
 
@@ -281,7 +281,7 @@
                     <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                         <i class="fa-solid fa-receipt text-emerald-600"></i> 花費記帳與智慧分帳
                     </h2>
-                    <button onclick="openModal('add-expense-modal')" class="bg-emerald-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">
+                    <button onclick="openAddExpenseModal()" class="bg-emerald-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">
                         <i class="fa-solid fa-plus"></i> 新增
                     </button>
                 </div>
@@ -336,7 +336,7 @@
                 </div>
 
                 <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                    <h4 class="text-xs font-bold text-slate-700 mb-2">支出明細紀錄</h4>
+                    <h4 class="text-xs font-bold text-slate-700 mb-2">支出明細紀錄 (點選項目可修改)</h4>
                     <div id="expense-list-container" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
                 </div>
             </div>
@@ -383,7 +383,7 @@
         </div>
     </main>
 
-    <!-- 底部固定導航列 -->
+    <!-- 底部固定導覽列 -->
     <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-3 py-2 flex items-center justify-around text-slate-400 flex-shrink-0 shadow-lg">
         <button onclick="goHomeLanding()" id="nav-btn-home" class="flex flex-col items-center gap-0.5 text-[10px] font-bold text-amber-600">
             <i class="fa-solid fa-house text-base"></i> <span>首頁</span>
@@ -507,17 +507,18 @@
         </div>
     </div>
 
-    <!-- 2. 新增行程活動 -->
+    <!-- 2. 新增與編輯行程活動 (含花費設定與連動) -->
     <div id="add-event-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs max-h-[90vh] overflow-y-auto">
             <button onclick="closeModal('add-event-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增行程項目</h3>
+            <h3 id="event-modal-title" class="font-bold text-slate-900 mb-3 text-sm">新增行程項目</h3>
             <form onsubmit="handleAddEvent(event)" class="space-y-2.5">
+                <input type="hidden" id="event-edit-id" value="">
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block font-bold text-slate-700 mb-1">第幾天</label><select id="event-day-select" class="w-full border border-slate-200 rounded p-1.5 outline-none"></select></div>
                     <div><label class="block font-bold text-slate-700 mb-1">時間</label><input type="time" id="event-time" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
-                <div><label class="block font-bold text-slate-700 mb-1">景點名稱</label><input type="text" id="event-title" required placeholder="例: 清水寺" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">景點名稱</label><input type="text" id="event-title" required placeholder="例: 清水寺門票" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div><label class="block font-bold text-slate-700 mb-1">地點 / 地址</label><input type="text" id="event-address" placeholder="例: 京都市東山區清水1丁目" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
@@ -526,19 +527,43 @@
                             <option value="sightseeing">⛩️ 景點</option><option value="food">🍜 美食</option><option value="transport">🚌 交通</option><option value="hotel">🏨 住宿</option><option value="shopping">🛍️ 購物</option>
                         </select>
                     </div>
-                    <div><label class="block font-bold text-slate-700 mb-1">花費 (TWD)</label><input type="number" id="event-cost" value="0" min="0" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">花費金額 (TWD)</label><input type="number" id="event-cost" value="0" min="0" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
-                <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">確認新增</button>
+
+                <!-- 整合花費分帳連動區塊 -->
+                <div class="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-emerald-900 flex items-center gap-1"><i class="fa-solid fa-coins"></i> 同步建立記帳分帳項目</label>
+                        <input type="checkbox" id="event-link-expense" checked class="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-bold text-emerald-800 mb-0.5">實際付款人</label><input type="text" id="event-expense-payer" placeholder="例: 小明" class="w-full border border-emerald-200 bg-white rounded p-1 outline-none"></div>
+                        <div>
+                            <label class="block font-bold text-emerald-800 mb-0.5">分帳模式</label>
+                            <select id="event-expense-split-mode" class="w-full border border-emerald-200 bg-white rounded p-1 outline-none">
+                                <option value="normal">均分模式</option>
+                                <option value="payer_excluded">代墊模式(不含付款人)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-emerald-800 mb-0.5">參與分攤成員 (逗號分隔)</label>
+                        <input type="text" id="event-expense-participants" placeholder="小明, 小華, 小美" class="w-full border border-emerald-200 bg-white rounded p-1 outline-none">
+                    </div>
+                </div>
+
+                <button type="submit" id="event-submit-btn" class="w-full bg-amber-600 text-white font-semibold py-2 rounded-lg shadow-sm">確認新增</button>
             </form>
         </div>
     </div>
 
-    <!-- 3. 新增記帳 -->
+    <!-- 3. 新增與編輯記帳 -->
     <div id="add-expense-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs">
             <button onclick="closeModal('add-expense-modal')" class="absolute top-3 right-3 text-slate-400 text-base"><i class="fa-solid fa-xmark"></i></button>
-            <h3 class="font-bold text-slate-900 mb-3 text-sm">新增記帳品項與彈性分帳</h3>
+            <h3 id="expense-modal-title" class="font-bold text-slate-900 mb-3 text-sm">新增記帳品項與彈性分帳</h3>
             <form onsubmit="handleAddExpense(event)" class="space-y-2.5">
+                <input type="hidden" id="expense-edit-id" value="">
                 <div><label class="block font-bold text-slate-700 mb-1">項目名稱</label><input type="text" id="expense-title" required placeholder="例: 幫買伴手禮" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block font-bold text-slate-700 mb-1">金額 (TWD)</label><input type="number" id="expense-amount" required min="1" placeholder="1500" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
@@ -564,7 +589,7 @@
                     <label class="block font-bold text-slate-700 mb-1">參與分攤成員 (以逗號分隔)</label>
                     <input type="text" id="expense-participants" value="小明, 小華, 小美" required class="w-full border border-slate-200 rounded p-1.5 outline-none" placeholder="小華, 小美">
                 </div>
-                <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-sm">記錄支出並計算分帳</button>
+                <button type="submit" id="expense-submit-btn" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-sm">記錄支出並計算分帳</button>
             </form>
         </div>
     </div>
@@ -806,7 +831,7 @@
                 budget: 45000,
                 members: 3,
                 collaborators: [],
-                coverPhoto: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+                coverPhoto: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80',
                 notes: '準備迎向一趟輕鬆愉快的賞楓古都之旅。',
                 itinerary: [
                     { id: '1', day: 1, time: '09:30', title: '關西國際機場抵達', address: '關西國際機場', type: 'transport', cost: 1200, notes: '搭乘特急' },
@@ -880,10 +905,8 @@
             const catList = document.getElementById('page-category-list');
             if (home) {
                 home.classList.remove('hidden');
-                const savedBg = localStorage.getItem('home_custom_bg');
-                if (savedBg) {
-                    home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${savedBg}')`;
-                }
+                const savedBg = localStorage.getItem('home_custom_bg') || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80';
+                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${savedBg}')`;
             }
             if (catList) catList.classList.add('hidden');
             for (let i = 1; i <= totalPages; i++) {
@@ -926,7 +949,9 @@
                 showToast('請輸入網址或上傳圖片', 'error');
                 return;
             }
-            localStorage.setItem('home_custom_bg', bg);
+            bg = bg.replace(/['"()\s]/g, c => encodeURIComponent(c));
+            try { localStorage.setItem('home_custom_bg', bg); }
+            catch (err) { showToast('圖片太大，無法儲存（請改用較小的圖片或網址）', 'error'); return; }
             const home = document.getElementById('page-home');
             if (home) {
                 home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${bg}')`;
@@ -939,7 +964,7 @@
             localStorage.removeItem('home_custom_bg');
             const home = document.getElementById('page-home');
             if (home) {
-                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80')`;
+                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80')`;
             }
             closeModal('edit-home-bg-modal');
             showToast('已恢復預設背景', 'info');
@@ -1010,7 +1035,7 @@
                     div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-amber-400 transition';
                     div.innerHTML = `
                         <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onclick="openTripById('${t.id}')">
-                            <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
+                            <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
                             <div class="min-w-0">
                                 <h4 class="font-bold text-slate-800 text-xs truncate">${collabTag}${t.title}</h4>
                                 <p class="text-[10px] text-slate-500 truncate">${t.startDate || ''} ~ ${t.endDate || ''} | ${t.destination || ''}</p>
@@ -1105,8 +1130,11 @@
                 setElText('cover-collaborators', collabList.length > 0 ? collabList.join(', ') : '無設定額外共編帳號');
 
                 const coverImg = document.getElementById('cover-photo');
-                if (coverImg && currentTripData.coverPhoto) {
-                    coverImg.src = currentTripData.coverPhoto;
+                if (coverImg) {
+                    coverImg.src = currentTripData.coverPhoto || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80';
+                    coverImg.onerror = function() {
+                        this.src = 'https://placehold.co/800x400/d97706/ffffff?text=Travel+Book';
+                    };
                 }
 
                 renderDayTabs();
@@ -1175,7 +1203,8 @@
 
             dayEvents.sort((a,b) => (a.time || '').localeCompare(b.time || '')).forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between gap-2 text-xs';
+                div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between gap-2 text-xs cursor-pointer hover:border-amber-400 transition';
+                div.onclick = () => window.editItineraryItem(item.id);
                 div.innerHTML = `
                     <div class="flex items-start gap-2 flex-1 min-w-0">
                         <span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">${index + 1}</span>
@@ -1187,17 +1216,58 @@
                             ${item.address ? `<p class="text-slate-500 text-[10px] truncate"><i class="fa-solid fa-map-pin text-amber-600 mr-0.5"></i>${item.address}</p>` : ''}
                         </div>
                     </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <div class="flex items-center gap-1.5 flex-shrink-0" onclick="event.stopPropagation()">
                         ${item.cost > 0 ? `<span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">NT$ ${item.cost}</span>` : ''}
-                        <button onclick="window.deleteItineraryItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="window.editItineraryItem('${item.id}')" class="text-slate-400 hover:text-amber-600 p-1" title="編輯行程"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.deleteItineraryItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1" title="刪除行程"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 `;
                 container.appendChild(div);
             });
         }
 
+        window.openAddEventModal = function() {
+            document.getElementById('event-edit-id').value = '';
+            document.getElementById('event-modal-title').innerText = '新增行程項目';
+            document.getElementById('event-submit-btn').innerText = '確認新增';
+            document.getElementById('event-day-select').value = activeDayTab;
+            document.getElementById('event-time').value = '09:00';
+            document.getElementById('event-title').value = '';
+            document.getElementById('event-address').value = '';
+            document.getElementById('event-type').value = 'sightseeing';
+            document.getElementById('event-cost').value = '0';
+            document.getElementById('event-link-expense').checked = true;
+            document.getElementById('event-expense-payer').value = '';
+            document.getElementById('event-expense-split-mode').value = 'normal';
+            document.getElementById('event-expense-participants').value = '小明, 小華, 小美';
+            openModal('add-event-modal');
+        };
+
+        window.editItineraryItem = function(id) {
+            const item = (currentTripData.itinerary || []).find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('event-edit-id').value = item.id;
+            document.getElementById('event-modal-title').innerText = '編輯行程項目';
+            document.getElementById('event-submit-btn').innerText = '儲存修改';
+            document.getElementById('event-day-select').value = item.day || activeDayTab;
+            document.getElementById('event-time').value = item.time || '09:00';
+            document.getElementById('event-title').value = item.title || '';
+            document.getElementById('event-address').value = item.address || '';
+            document.getElementById('event-type').value = item.type || 'sightseeing';
+            document.getElementById('event-cost').value = item.cost || 0;
+            document.getElementById('event-link-expense').checked = !!item.linkedExpenseId;
+            document.getElementById('event-expense-payer').value = item.expensePayer || '';
+            document.getElementById('event-expense-split-mode').value = item.expenseSplitMode || 'normal';
+            document.getElementById('event-expense-participants').value = (item.expenseParticipants || ['小明', '小華', '小美']).join(', ');
+            openModal('add-event-modal');
+        };
+
         window.deleteItineraryItem = function(id) {
-            currentTripData.itinerary = currentTripData.itinerary.filter(i => i.id !== id);
+            const item = (currentTripData.itinerary || []).find(i => i.id === id);
+            if (item && item.linkedExpenseId) {
+                currentTripData.expenses = (currentTripData.expenses || []).filter(ex => ex.id !== item.linkedExpenseId);
+            }
+            currentTripData.itinerary = (currentTripData.itinerary || []).filter(i => i.id !== id);
             saveTripToCloud();
         };
 
@@ -1255,17 +1325,26 @@
             const payerSel = document.getElementById('expense-filter-payer');
             if (!dateSel) return;
 
+            const currentSelectedDate = dateSel.value;
+            const currentSelectedCat = catSel.value;
+            const currentSelectedPayer = payerSel.value;
+
             const dates = Array.from(new Set(expenses.map(e => e.date).filter(Boolean))).sort();
             dateSel.innerHTML = '<option value="ALL">全部日期</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+            if (dates.includes(currentSelectedDate)) dateSel.value = currentSelectedDate;
 
             const cats = Array.from(new Set([...Object.keys(PRESET_CATEGORIES), ...expenses.map(e => e.category)]));
             catSel.innerHTML = '<option value="ALL">全部分類</option>' + cats.map(c => `<option value="${c}">${getCategoryLabel(c)}</option>`).join('');
+            if (cats.includes(currentSelectedCat)) catSel.value = currentSelectedCat;
 
             const payers = Array.from(new Set(expenses.map(e => e.payer).filter(Boolean))).sort();
             payerSel.innerHTML = '<option value="ALL">全部付款</option>' + payers.map(p => `<option value="${p}">${p}</option>`).join('');
+            if (payers.includes(currentSelectedPayer)) payerSel.value = currentSelectedPayer;
         }
 
         function renderExpenses() {
+            populateExpenseFilterOptions();
+
             const allExpenses = currentTripData.expenses || [];
             const dateSelect = document.getElementById('expense-filter-date');
             const categorySelect = document.getElementById('expense-filter-category');
@@ -1298,15 +1377,17 @@
                 } else {
                     filtered.slice().reverse().forEach(item => {
                         const div = document.createElement('div');
-                        div.className = 'bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px]';
+                        div.className = 'bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] cursor-pointer hover:border-emerald-400 transition';
+                        div.onclick = () => window.editExpenseItem(item.id);
                         div.innerHTML = `
                             <div>
                                 <span class="font-bold text-slate-800">${item.title}</span>
                                 <p class="text-[9px] text-slate-400">${item.date} | 付款: ${item.payer} | 模式: ${item.splitMode === 'payer_excluded' ? '代墊' : '均分'}</p>
                             </div>
-                            <div class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
                                 <span class="font-bold text-emerald-600">NT$ ${Number(item.amount).toLocaleString()}</span>
-                                <button onclick="window.deleteExpenseItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+                                <button onclick="window.editExpenseItem('${item.id}')" class="text-slate-400 hover:text-emerald-600 p-1" title="編輯花費"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="window.deleteExpenseItem('${item.id}')" class="text-slate-300 hover:text-red-500 p-1" title="刪除花費"><i class="fa-solid fa-xmark"></i></button>
                             </div>
                         `;
                         container.appendChild(div);
@@ -1320,52 +1401,120 @@
 
         window.renderExpenses = renderExpenses;
 
+        // 依所有支出計算每位成員的最終淨額，再配對最少轉帳筆數。
+        // 正數代表應收款，負數代表應付款；全程以「分」為單位避免浮點誤差。
+        function calculateSettlementTransfers(expenses) {
+            const net = new Map();
+
+            const addNet = (person, cents) => {
+                if (!person) return;
+                net.set(person, (net.get(person) || 0) + cents);
+            };
+
+            (Array.isArray(expenses) ? expenses : []).forEach(ex => {
+                if (!ex) return;
+
+                const payer = String(ex.payer || '').trim();
+                const amount = Number(ex.amount);
+                if (!payer || !Number.isFinite(amount) || amount <= 0) return;
+
+                const totalCents = Math.round(amount * 100);
+                if (totalCents <= 0) return;
+
+                // 去除空白及重複姓名，避免同一人被重複計入分攤。
+                let participants = Array.isArray(ex.participants)
+                    ? [...new Set(ex.participants.map(p => String(p || '').trim()).filter(Boolean))]
+                    : [];
+
+                const mode = ex.splitMode || 'normal';
+
+                if (mode === 'payer_excluded') {
+                    // 代墊模式：付款人不分攤，即使誤列在名單中也排除。
+                    participants = participants.filter(p => p !== payer);
+                } else {
+                    // 均分模式：付款人必須是分攤成員；未列入時自動補入。
+                    if (!participants.includes(payer)) participants.push(payer);
+                }
+
+                if (participants.length === 0) return;
+
+                // 付款人先取得整筆墊付款，再扣除其自身應負擔份額。
+                addNet(payer, totalCents);
+
+                const baseShare = Math.floor(totalCents / participants.length);
+                let remainder = totalCents - baseShare * participants.length;
+
+                participants.forEach(person => {
+                    // 將不足一分的餘額依名單順序分配，確保分攤總額完全等於支出。
+                    const share = baseShare + (remainder > 0 ? 1 : 0);
+                    if (remainder > 0) remainder -= 1;
+                    addNet(person, -share);
+                });
+            });
+
+            // 取得每個人的淨額，並過濾掉金額極小或零的成員
+            const balances = {};
+            net.forEach((cents, person) => {
+                if (Math.abs(cents) >= 1) {
+                    balances[person] = cents; // 正數表債權(應收), 負數表債務(應付)
+                }
+            });
+
+            const debtors = [];
+            const creditors = [];
+
+            Object.entries(balances).forEach(([person, cents]) => {
+                if (cents < 0) {
+                    debtors.push({ person, amount: -cents }); // 轉為正數代表欠多少
+                } else if (cents > 0) {
+                    creditors.push({ person, amount: cents }); // 轉為正數代表應收多少
+                }
+            });
+
+            // 進行雙向相互抵銷與點對點配對演算法
+            const transfers = [];
+            
+            // 迴圈配對債務人與債權人直到兩邊結清
+            let dIdx = 0;
+            let cIdx = 0;
+
+            while (dIdx < debtors.length && cIdx < creditors.length) {
+                const debtor = debtors[dIdx];
+                const creditor = creditors[cIdx];
+
+                const payAmount = Math.min(debtor.amount, creditor.amount);
+
+                if (payAmount > 0) {
+                    transfers.push({
+                        debtor: debtor.person,
+                        creditor: creditor.person,
+                        cents: payAmount
+                    });
+
+                    debtor.amount -= payAmount;
+                    creditor.amount -= payAmount;
+                }
+
+                if (debtor.amount === 0) dIdx++;
+                if (creditor.amount === 0) cIdx++;
+            }
+
+            return transfers;
+        }
+
         function renderSettlementSummary(expenses) {
             const container = document.getElementById('settlement-container');
             if (!container) return;
             container.innerHTML = '';
 
-            let balances = {};
-            
-            expenses.forEach(ex => {
-                const payer = ex.payer;
-                const amount = Number(ex.amount) || 0;
-                const parts = ex.participants || [];
-                const mode = ex.splitMode || 'normal';
-
-                if (!payer || parts.length === 0) return;
-
-                if (mode === 'payer_excluded') {
-                    const perShare = amount / parts.length;
-                    parts.forEach(p => {
-                        if (p !== payer) {
-                            if (!balances[p]) balances[p] = {};
-                            balances[p][payer] = (balances[p][payer] || 0) + perShare;
-                        }
-                    });
-                } else {
-                    const totalParts = parts.includes(payer) ? parts.length : parts.length + 1;
-                    const perShare = amount / totalParts;
-                    const allP = parts.includes(payer) ? parts : [...parts, payer];
-
-                    allP.forEach(p => {
-                        if (p !== payer) {
-                            if (!balances[p]) balances[p] = {};
-                            balances[p][payer] = (balances[p][payer] || 0) + perShare;
-                        }
-                    });
-                }
-            });
-
-            let list = [];
-            Object.keys(balances).forEach(debtor => {
-                Object.keys(balances[debtor]).forEach(creditor => {
-                    let amt = balances[debtor][creditor];
-                    if (amt > 1) {
-                        list.push({ debtor, creditor, amount: Math.round(amt) });
-                    }
-                });
-            });
+            let list;
+            try {
+                list = calculateSettlementTransfers(expenses || []);
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = `<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>`;
+                return;
+            }
 
             if (list.length === 0) {
                 container.innerHTML = `<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>`;
@@ -1374,18 +1523,23 @@
 
             if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
 
-            list.forEach((item, idx) => {
-                const key = `${item.debtor}_to_${item.creditor}`;
+            list.forEach(item => {
+                const key = JSON.stringify([item.debtor, item.creditor, item.cents]);
                 const isChecked = !!currentTripData.settlementsPaid[key];
+                const amount = item.cents / 100;
+                const amountText = amount.toLocaleString('zh-TW', {
+                    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+                    maximumFractionDigits: 2
+                });
 
                 const div = document.createElement('div');
                 div.className = `p-2 rounded-lg border flex items-center justify-between transition ${isChecked ? 'bg-emerald-50/70 border-emerald-200 text-slate-400 line-through' : 'bg-slate-50 border-slate-200 text-slate-800 font-bold'}`;
                 div.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleSettlementPaid('${key}', this.checked)" class="w-4 h-4 rounded text-amber-600 accent-amber-600 cursor-pointer">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleSettlementPaid('${key}', this.checked)" class="w-4 h-4 rounded text-amber-600 accent-amber-600 cursor-pointer flex-shrink-0">
                         <span>${item.debtor} 需支付給 ${item.creditor}</span>
                     </div>
-                    <span class="text-emerald-700 font-bold">NT$ ${item.amount.toLocaleString()}</span>
+                    <span class="text-emerald-700 font-bold whitespace-nowrap">NT$ ${amountText}</span>
                 `;
                 container.appendChild(div);
             });
@@ -1460,7 +1614,7 @@
                 row.className = 'space-y-1';
                 row.innerHTML = `
                     <div class="flex justify-between text-[11px] font-bold text-slate-700">
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${color}"></span>${label}</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${color}"></span>${esc(label)}</span>
                         <span>NT$ ${amt.toLocaleString()} (${pct}%)</span>
                     </div>
                     <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -1496,13 +1650,14 @@
         }
 
         window.deleteChecklistItem = function(id) {
-            currentTripData.checklist = currentTripData.checklist.filter(i => i.id !== id);
+            currentTripData.checklist = (currentTripData.checklist || []).filter(i => i.id !== id);
             saveTripToCloud();
         };
 
         window.addChecklistItemPrompt = function() {
             const t = prompt('請輸入行李項目:');
             if (t && t.trim()) {
+                if (!Array.isArray(currentTripData.checklist)) currentTripData.checklist = [];
                 currentTripData.checklist.push({ id: 'c_' + Date.now(), text: t.trim(), done: false });
                 saveTripToCloud();
             }
@@ -1638,7 +1793,7 @@
             currentTripId = newId;
             currentTripData = {
                 id: newId, title, startDate: start, endDate: end, destination: dest, budget, members: mem,
-                collaborators: [],
+                collaborators: [], settlementsPaid: {},
                 coverPhoto: cp, notes, itinerary: [], expenses: [],
                 checklist: [{ id: 'c1', text: '護照與證件', done: false }]
             };
@@ -1651,23 +1806,141 @@
 
         window.handleAddEvent = function(e) {
             e.preventDefault();
-            currentTripData.itinerary.push({
-                id: 'e_' + Date.now(),
-                day: Number(document.getElementById('event-day-select').value),
-                time: document.getElementById('event-time').value,
-                title: document.getElementById('event-title').value,
-                address: document.getElementById('event-address').value,
-                type: document.getElementById('event-type').value,
-                cost: Number(document.getElementById('event-cost').value) || 0,
-                notes: ''
-            });
+            const editId = document.getElementById('event-edit-id').value;
+            const day = Number(document.getElementById('event-day-select').value);
+            const time = document.getElementById('event-time').value;
+            const title = document.getElementById('event-title').value;
+            const address = document.getElementById('event-address').value;
+            const type = document.getElementById('event-type').value;
+            const cost = Number(document.getElementById('event-cost').value) || 0;
+            
+            const linkExpense = document.getElementById('event-link-expense').checked;
+            const expPayer = document.getElementById('event-expense-payer').value.trim();
+            const expSplitMode = document.getElementById('event-expense-split-mode').value;
+            const partsStr = document.getElementById('event-expense-participants').value;
+            const expParticipants = partsStr ? partsStr.split(',').map(s => s.trim()).filter(Boolean) : ['小明', '小華', '小美'];
+
+            const startDateObj = new Date(currentTripData.startDate);
+            startDateObj.setUTCDate(startDateObj.getUTCDate() + (day - 1));
+            const eventDateStr = isNaN(startDateObj) ? '' : startDateObj.toISOString().split('T')[0];
+
+            if (editId) {
+                const item = (currentTripData.itinerary || []).find(i => i.id === editId);
+                if (item) {
+                    item.day = day;
+                    item.time = time;
+                    item.title = title;
+                    item.address = address;
+                    item.type = type;
+                    item.cost = cost;
+                    item.expensePayer = expPayer;
+                    item.expenseSplitMode = expSplitMode;
+                    item.expenseParticipants = expParticipants;
+
+                    if (cost > 0 && linkExpense) {
+                        if (item.linkedExpenseId) {
+                            const exItem = (currentTripData.expenses || []).find(ex => ex.id === item.linkedExpenseId);
+                            if (exItem) {
+                                exItem.title = title;
+                                exItem.amount = cost;
+                                exItem.date = eventDateStr;
+                                exItem.payer = expPayer || '小明';
+                                exItem.category = type;
+                                exItem.splitMode = expSplitMode;
+                                exItem.participants = expParticipants;
+                            } else {
+                                const newExId = 'ex_' + Date.now();
+                                item.linkedExpenseId = newExId;
+                                currentTripData.expenses.push({
+                                    id: newExId, title, amount: cost, date: eventDateStr,
+                                    payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
+                                });
+                            }
+                        } else {
+                            const newExId = 'ex_' + Date.now();
+                            item.linkedExpenseId = newExId;
+                            currentTripData.expenses.push({
+                                id: newExId, title, amount: cost, date: eventDateStr,
+                                payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
+                            });
+                        }
+                    } else if (item.linkedExpenseId) {
+                        currentTripData.expenses = currentTripData.expenses.filter(ex => ex.id !== item.linkedExpenseId);
+                        delete item.linkedExpenseId;
+                    }
+                }
+                showToast('行程與花費更新成功', 'success');
+            } else {
+                const newEvId = 'e_' + Date.now();
+                let linkedExId = null;
+
+                if (cost > 0 && linkExpense) {
+                    linkedExId = 'ex_' + Date.now();
+                    currentTripData.expenses.push({
+                        id: linkedExId, title, amount: cost, date: eventDateStr,
+                        payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
+                    });
+                }
+
+                currentTripData.itinerary.push({
+                    id: newEvId, day, time, title, address, type, cost, notes: '',
+                    linkedExpenseId: linkedExId,
+                    expensePayer: expPayer,
+                    expenseSplitMode: expSplitMode,
+                    expenseParticipants: expParticipants
+                });
+                showToast('行程與花費新增成功', 'success');
+            }
+
             saveTripToCloud();
             closeModal('add-event-modal');
-            showToast('行程新增成功', 'success');
+        };
+
+        window.openAddExpenseModal = function() {
+            document.getElementById('expense-edit-id').value = '';
+            document.getElementById('expense-modal-title').innerText = '新增記帳品項與彈性分帳';
+            document.getElementById('expense-submit-btn').innerText = '記錄支出並計算分帳';
+            document.getElementById('expense-title').value = '';
+            document.getElementById('expense-amount').value = '';
+            document.getElementById('expense-date').value = currentTripData.startDate;
+            document.getElementById('expense-category').value = 'food';
+            document.getElementById('expense-payer').value = '';
+            document.getElementById('expense-split-mode').value = 'normal';
+            document.getElementById('expense-participants').value = '小明, 小華, 小美';
+        };
+
+        window.editExpenseItem = function(id) {
+            const item = (currentTripData.expenses || []).find(e => e.id === id);
+            if (!item) return;
+            const editIdInput = document.getElementById('expense-edit-id');
+            if (editIdInput) editIdInput.value = item.id;
+            const modalTitle = document.getElementById('expense-modal-title');
+            if (modalTitle) modalTitle.innerText = '編輯記帳品項';
+            const submitBtn = document.getElementById('expense-submit-btn');
+            if (submitBtn) submitBtn.innerText = '儲存修改';
+
+            const titleInput = document.getElementById('expense-title');
+            if (titleInput) titleInput.value = item.title || '';
+            const amountInput = document.getElementById('expense-amount');
+            if (amountInput) amountInput.value = item.amount || '';
+            const dateInput = document.getElementById('expense-date');
+            if (dateInput) dateInput.value = item.date || currentTripData.startDate;
+            const catSelect = document.getElementById('expense-category');
+            if (catSelect) catSelect.value = item.category || 'food';
+            const payerInput = document.getElementById('expense-payer');
+            if (payerInput) payerInput.value = item.payer || '';
+            const splitModeSelect = document.getElementById('expense-split-mode');
+            if (splitModeSelect) splitModeSelect.value = item.splitMode || 'normal';
+            const partsInput = document.getElementById('expense-participants');
+            if (partsInput) partsInput.value = (item.participants || ['小明', '小華', '小美']).join(', ');
+
+            openModal('add-expense-modal');
         };
 
         window.handleAddExpense = function(e) {
             e.preventDefault();
+            const editIdEl = document.getElementById('expense-edit-id');
+            const editId = editIdEl ? editIdEl.value : '';
             const title = document.getElementById('expense-title').value;
             const amount = Number(document.getElementById('expense-amount').value);
             const date = document.getElementById('expense-date').value;
@@ -1677,14 +1950,32 @@
             const partsStr = document.getElementById('expense-participants').value;
             const participants = partsStr ? partsStr.split(',').map(s => s.trim()).filter(Boolean) : [payer];
 
-            currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat, splitMode, participants });
+            if (editId) {
+                const item = (currentTripData.expenses || []).find(ex => ex.id === editId);
+                if (item) {
+                    item.title = title;
+                    item.amount = amount;
+                    item.date = date;
+                    item.payer = payer;
+                    item.category = cat;
+                    item.splitMode = splitMode;
+                    item.participants = participants;
+                }
+                showToast('記帳修改成功', 'success');
+            } else {
+                currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat, splitMode, participants });
+                showToast('記帳新增成功', 'success');
+            }
+
             saveTripToCloud();
             closeModal('add-expense-modal');
-            showToast('記帳與分帳計算完成', 'success');
         };
 
         window.deleteExpenseItem = function(id) {
-            currentTripData.expenses = currentTripData.expenses.filter(e => e.id !== id);
+            currentTripData.expenses = (currentTripData.expenses || []).filter(e => e.id !== id);
+            (currentTripData.itinerary || []).forEach(it => {
+                if (it.linkedExpenseId === id) delete it.linkedExpenseId;
+            });
             saveTripToCloud();
             showToast('已刪除', 'info');
         };
@@ -1718,7 +2009,11 @@
                 const tTitle = pMap[id];
                 const div = document.createElement('div');
                 div.className = `p-2.5 rounded-xl border flex justify-between items-center ${id === currentTripId ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`;
-                div.innerHTML = `<span class="font-bold cursor-pointer flex-1 text-slate-800" onclick="window.switchTrip('${id}')">${tTitle}</span>`;
+                const sp = document.createElement('span');
+                sp.className = 'font-bold cursor-pointer flex-1 text-slate-800';
+                sp.textContent = tTitle;
+                sp.onclick = () => window.switchTrip(id);
+                div.appendChild(sp);
                 container.appendChild(div);
             });
         };
@@ -1746,9 +2041,9 @@
             const email = document.getElementById('reg-email').value;
             const password = document.getElementById('reg-password').value;
             try {
-                const { error } = await supabaseClient.auth.signUp({ email, password });
+                const { data, error } = await supabaseClient.auth.signUp({ email, password });
                 if (error) throw error;
-                showToast('註冊成功！請直接登入', 'success');
+                showToast(data && data.session ? '註冊成功！' : '註冊成功！若需信箱驗證，請先到信箱點擊驗證連結再登入', 'success');
                 switchAuthTab('login');
             } catch(err) {
                 showToast('註冊失敗: ' + err.message, 'error');
@@ -1787,11 +2082,14 @@
         };
 
         window.exportTripJSON = function() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentTripData, null, 2));
+            const blob = new Blob([JSON.stringify(currentTripData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
             const dl = document.createElement('a');
-            dl.setAttribute("href", dataStr);
-            dl.setAttribute("download", `${currentTripData.title}.json`);
+            dl.href = url;
+            dl.download = `${currentTripData.title || 'trip'}.json`;
+            document.body.appendChild(dl);
             dl.click(); dl.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             showToast('已匯出備份', 'success');
         };
 
@@ -1809,13 +2107,15 @@
                 switchEditCoverMode('url');
             }
             if (id === 'new-project-modal') {
-                const today = new Date().toISOString().split('T')[0];
+                const _d = new Date(), today = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
                 document.getElementById('new-trip-start').value = today;
                 document.getElementById('new-trip-end').value = today;
                 switchNewCoverMode('url');
             }
             if (id === 'add-expense-modal') {
-                document.getElementById('expense-date').value = currentTripData.startDate;
+                if (!document.getElementById('expense-edit-id').value) {
+                    openAddExpenseModal();
+                }
             }
             if (id === 'auth-modal') {
                 const loggedPanel = document.getElementById('auth-logged-in-panel');
@@ -1849,5 +2149,534 @@
             setTimeout(() => t.remove(), 2200);
         }
     </script>
+
+    <!-- ===== 修補包（結算完整債務關係與 bug 修正）===== -->
+<style>input,textarea,select{user-select:text;-webkit-user-select:text}</style>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  window.esc = esc;
+  const pad = n => String(n).padStart(2, '0');
+  const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+  const fmt = c => { const a = c / 100; return a.toLocaleString('zh-TW', { minimumFractionDigits: Number.isInteger(a) ? 0 : 2, maximumFractionDigits: 2 }); };
+  const DEFAULT_IMG = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80';
+
+  /* ============ 1. 智慧結算：兩人之間可抵銷，不跨人轉嫁 ============ */
+  // 每筆支出各自產生「誰 → 付款人」的債務，彼此完全獨立
+  function expenseDebts(expenses) {
+    const out = [];
+    (expenses || []).forEach(ex => {
+      if (!ex) return;
+      const payer = String(ex.payer || '').trim();
+      const amount = Number(ex.amount);
+      if (!payer || !Number.isFinite(amount) || amount <= 0) return;
+      const total = Math.round(amount * 100);
+      let parts = [...new Set((Array.isArray(ex.participants) ? ex.participants : []).map(p => String(p || '').trim()).filter(Boolean))];
+      if (ex.splitMode === 'payer_excluded') parts = parts.filter(p => p !== payer);
+      else if (!parts.includes(payer)) parts.push(payer);
+      if (!parts.length) return;
+      const base = Math.floor(total / parts.length);
+      let rem = total - base * parts.length;
+      parts.forEach(p => {
+        const share = base + (rem > 0 ? 1 : 0);
+        if (rem > 0) rem--;
+        if (p === payer) return;                       // 付款人自己的份額不欠自己
+        out.push({ debtor: p, creditor: payer, cents: share, exId: ex.id, title: ex.title, date: ex.date });
+      });
+    });
+    return out;
+  }
+
+  window.renderSettlementSummary = function (expenses) {
+    const box = $('settlement-container');
+    if (!box) return;
+    const oldBar = $('settle-mode-toggle'); if (oldBar) oldBar.remove();
+
+    let debts;
+    try { debts = expenseDebts(expenses || []); }
+    catch (err) { console.error(err); box.innerHTML = '<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>'; return; }
+
+    // 只在「同一組兩個人」之間抵銷；A↔B 的債務不會被轉嫁給 C
+    const pairMap = {};
+    debts.forEach(t => {
+      const [x, y] = [t.debtor, t.creditor].sort();
+      const g = pairMap[x + '\u0000' + y] = pairMap[x + '\u0000' + y] || { x, y, xy: 0, yx: 0, items: [] };
+      if (t.debtor === x) g.xy += t.cents; else g.yx += t.cents;      // xy: x 欠 y；yx: y 欠 x
+      g.items.push(t);
+    });
+    const list = [];
+    Object.values(pairMap).forEach(g => {
+      if (g.xy === g.yx) return;
+      const xOwes = g.xy > g.yx;
+      list.push({ debtor: xOwes ? g.x : g.y, creditor: xOwes ? g.y : g.x, cents: Math.abs(g.xy - g.yx), g });
+    });
+    if (!list.length) { box.innerHTML = '<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>'; return; }
+
+    if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
+    const paid = currentTripData.settlementsPaid;
+    const keyOf = t => JSON.stringify([t.debtor, t.creditor, t.cents]);
+
+    const sum = {};
+    const S = n => (sum[n] = sum[n] || { pay: 0, recv: 0 });
+    list.forEach(t => { S(t.debtor).pay += t.cents; S(t.creditor).recv += t.cents; });
+    const totalAll = list.reduce((s, t) => s + t.cents, 0);
+    const unpaid = list.filter(t => !paid[keyOf(t)]).reduce((s, t) => s + t.cents, 0);
+    const netSum = Object.values(sum).reduce((s, v) => s + v.recv - v.pay, 0);
+
+    let html = `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] flex justify-between"><span>尚未結清</span><span class="font-bold text-amber-700">NT$ ${fmt(unpaid)} / ${fmt(totalAll)}</span></div>
+      <div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。</div>`;
+
+    const byDebtor = {};
+    list.forEach(t => (byDebtor[t.debtor] = byDebtor[t.debtor] || []).push(t));
+    Object.keys(byDebtor).sort().forEach(d => {
+      html += `<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700 flex justify-between"><span>${esc(d)} 應付</span><span>NT$ ${fmt(sum[d].pay)}</span></div>`;
+      byDebtor[d].sort((a, b) => a.creditor.localeCompare(b.creditor)).forEach(t => {
+        const k = keyOf(t), done = !!paid[k], g = t.g;
+        const line = (from, to) => g.items.filter(i => i.debtor === from && i.creditor === to)
+          .map(i => `${esc(from)} 欠 ${esc(to)}：${esc(i.title)} ${fmt(i.cents)}`).join('；');
+        const fwd = line(t.debtor, t.creditor), back = line(t.creditor, t.debtor);
+        const detail = [fwd, back].filter(Boolean).join('<br>') + (back ? '<br>→ 抵銷後如上' : '');
+        html += `<div class="px-2 py-1.5 border-t border-slate-100 ${done ? 'bg-emerald-50/70 text-slate-400 line-through' : 'text-slate-800'}">
+          <div class="flex items-center justify-between"><label class="flex items-center gap-2 min-w-0 cursor-pointer"><input type="checkbox" data-key="${esc(k)}" ${done ? 'checked' : ''} class="w-4 h-4 accent-amber-600 flex-shrink-0"><span>${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span></label><span class="font-bold text-emerald-700 whitespace-nowrap">NT$ ${fmt(t.cents)}</span></div>
+          <p class="text-[9px] text-slate-400 ml-6 leading-relaxed">${detail}</p></div>`;
+      });
+      html += '</div>';
+    });
+
+    html += '<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700">每人收支總表</div>';
+    Object.keys(sum).sort().forEach(n => {
+      const v = sum[n], net = v.recv - v.pay;
+      html += `<div class="px-2 py-1 border-t border-slate-100 flex justify-between"><span class="font-bold">${esc(n)}</span><span class="text-[10px] text-slate-500">應付 ${fmt(v.pay)}｜應收 ${fmt(v.recv)}</span><span class="font-bold ${net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-slate-400'}">${net > 0 ? '+' : ''}${fmt(net)}</span></div>`;
+    });
+    html += `<div class="px-2 py-1 border-t border-slate-200 text-[10px] ${netSum === 0 ? 'text-emerald-600' : 'text-red-500'}">全體淨額加總：${fmt(netSum)} ${netSum === 0 ? '✓ 收支平衡' : '✗ 不平衡'}</div></div>`;
+
+    box.innerHTML = html;
+    box.onchange = e => { const k = e.target.dataset && e.target.dataset.key; if (k !== undefined) window.toggleSettlementPaid(k, e.target.checked); };
+  };
+
+  /* ============ 2. 無法開啟的「新增花費」視窗、openModal 遞迴 ============ */
+  window.openAddExpenseModal = function () {
+    $('expense-edit-id').value = '';
+    $('expense-modal-title').innerText = '新增記帳品項與彈性分帳';
+    $('expense-submit-btn').innerText = '記錄支出並計算分帳';
+    $('expense-title').value = ''; $('expense-amount').value = '';
+    $('expense-date').value = currentTripData.startDate || localToday();
+    $('expense-category').value = 'food'; $('expense-payer').value = '';
+    $('expense-split-mode').value = 'normal';
+    $('expense-participants').value = '小明, 小華, 小美';
+    $('add-expense-modal').classList.remove('hidden');
+  };
+  const _openModal = window.openModal;
+  window.openModal = function (id) {
+    if (id === 'add-expense-modal') { $(id).classList.remove('hidden'); return; }   // 編輯時由 editExpenseItem 先填資料
+    if (id === 'edit-trip-modal') { $('input-trip-cover-base64').value = ''; $('input-trip-cover-file').value = ''; }
+    if (id === 'new-project-modal') { $('new-trip-cover-base64').value = ''; $('new-trip-cover-file').value = ''; }
+    if (id === 'edit-home-bg-modal') { $('input-home-bg-base64').value = ''; $('input-home-bg-file').value = ''; }
+    _openModal(id);
+  };
+
+  /* ============ 3. 儲存／讀取：預設專案 ID 衝突、同步失敗誤報、共編者覆蓋擁有者 ============ */
+  const CAT_FIX = { sightseeing: 'tickets' };
+  /* 同步邏輯：先更新畫面再同步雲端；同步失敗的資料標記為「未同步」，不會被雲端舊資料蓋掉 */
+  let pushChain = Promise.resolve();
+  function pushTrip(id, trip) {                       // 依序送出，每次送出當下才序列化最新內容
+    const run = () => doPush(id, trip);
+    const p = pushChain.then(run, run);
+    pushChain = p.catch(() => {});
+    return p;
+  }
+  async function doPush(id, trip) {
+    if (!(supabaseClient && currentUser)) return false;
+    try {
+      const owner = trip.ownerId || currentUser.id;
+      trip.ownerId = owner;
+      const { error } = await supabaseClient.from('trips').upsert({ id, user_id: owner, title: trip.title, data: trip, updated_at: new Date().toISOString() });
+      if (error) throw error;
+      localStorage.removeItem('unsynced_' + id);
+      return true;
+    } catch (e) {
+      console.error(e);
+      localStorage.setItem('unsynced_' + id, '1');
+      showToast('雲端同步失敗，資料已存本機：' + (e.message || ''), 'error');
+      return false;
+    }
+  }
+
+  window.saveTripToCloud = async function () {
+    (currentTripData.expenses || []).forEach(e => { if (CAT_FIX[e.category]) e.category = CAT_FIX[e.category]; });
+    // 行程與花費的連動：以花費為準同步名稱／金額；花費已刪除則解除連動
+    (currentTripData.itinerary || []).forEach(it => {
+      if (!it.linkedExpenseId) return;
+      const ex = (currentTripData.expenses || []).find(x => x.id === it.linkedExpenseId);
+      if (ex) { it.cost = Number(ex.amount); it.title = ex.title; } else delete it.linkedExpenseId;
+    });
+    if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
+      localStorage.removeItem('local_trip_default_trip');
+      currentTripId = 'trip_' + Math.random().toString(36).slice(2, 10);
+      currentTripData.id = currentTripId;
+      localStorage.setItem('last_trip_id', currentTripId);
+    }
+    const id = currentTripId, trip = currentTripData;
+    try {
+      localStorage.setItem('local_trip_' + id, JSON.stringify(trip));
+      localStorage.setItem('trips_ever_saved', '1');
+    } catch (e) { showToast('本機儲存失敗（圖片可能過大）', 'error'); }
+    renderTripData();                                            // 先更新畫面，不等網路
+    if (supabaseClient && currentUser) {
+      if (await pushTrip(id, trip)) showToast('已同步至 Supabase 雲端共編', 'success');
+    } else showToast('已儲存至本機', 'info');
+  };
+
+  window.fetchAllCloudTrips = async function () {
+    if (!(supabaseClient && currentUser)) return;
+    try {
+      const { data, error } = await supabaseClient.from('trips').select('*');
+      if (!error && data) data.forEach(row => {
+        if (row.data && row.data.id && !localStorage.getItem('unsynced_' + row.data.id)) {
+          row.data.ownerId = row.user_id;
+          localStorage.setItem('local_trip_' + row.data.id, JSON.stringify(row.data));
+        }
+      });
+    } catch (e) { console.error(e); }
+    for (let i = 0; i < localStorage.length; i++) {              // 補送先前同步失敗的資料
+      const k = localStorage.key(i);
+      if (k && k.startsWith('unsynced_')) {
+        const id = k.slice(9), raw = localStorage.getItem('local_trip_' + id);
+        if (raw) { try { await pushTrip(id, JSON.parse(raw)); } catch (e) {} }
+      }
+    }
+  };
+
+  window.loadTripFromCloud = async function (tId) {
+    currentTripId = tId;
+    localStorage.setItem('last_trip_id', tId);
+    const local = localStorage.getItem('local_trip_' + tId);
+    try {
+      if (supabaseClient && currentUser && !(local && localStorage.getItem('unsynced_' + tId))) {
+        const { data } = await supabaseClient.from('trips').select('data,user_id').eq('id', tId).maybeSingle();
+        if (data && data.data) {
+          currentTripData = data.data; currentTripData.ownerId = data.user_id;
+          localStorage.setItem('local_trip_' + tId, JSON.stringify(currentTripData));
+          renderTripData(); return;
+        }
+      }
+    } catch (e) { console.error(e); }
+    try { currentTripData = local ? JSON.parse(local) : getInitialTripData(); } catch (e) { currentTripData = getInitialTripData(); }
+    renderTripData();
+  };
+
+  const _showToast = window.showToast;
+  window.showToast = function (msg, type) {                      // 錯誤訊息停留較久，避免來不及看
+    _showToast(msg, type);
+    if (type === 'error') { const c = $('toast-container'); const t = c && c.lastChild; if (t) { t.onclick = () => t.remove(); setTimeout(() => t.remove(), 6000); } }
+  };
+  // 圖示字型若未載入（例如網路擋掉 CDN），關閉鈕會變成空白方框而無法關閉
+  document.querySelectorAll('button[onclick^="closeModal"]').forEach(b => { b.textContent = '✕'; });
+
+  /* ============ 4. 專案清單：日期用本地時區、刪除後不復活、防 XSS ============ */
+  window.getAllLocalAndCloudTrips = async function () {
+    if (supabaseClient && currentUser) await fetchAllCloudTrips();
+    const m = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('local_trip_')) { try { const d = JSON.parse(localStorage.getItem(k)); if (d && d.id) m[d.id] = d; } catch (e) {} }
+    }
+    if (!Object.keys(m).length && !localStorage.getItem('trips_ever_saved')) m[currentTripId] = currentTripData;  // 只在全新使用者顯示範例
+    return Object.values(m);
+  };
+  window.updateLandingCounts = async function () {
+    const today = localToday(); let a = 0, p = 0;
+    (await getAllLocalAndCloudTrips()).forEach(t => ((t.endDate || today) >= today ? a++ : p++));
+    setElText('count-active', a); setElText('count-past', p);
+  };
+  let lastCategory = 'active';
+  window.openLandingCategory = async function (category) {
+    lastCategory = category;
+    const today = localToday();
+    const trips = (await getAllLocalAndCloudTrips()).filter(t => category === 'active' ? (t.endDate || today) >= today : (t.endDate || today) < today);
+    $('page-home').classList.add('hidden'); $('page-category-list').classList.remove('hidden');
+    $('category-title-display').innerText = category === 'active' ? '創造回憶 (進行中)' : '回憶過去 (已結束)';
+    const box = $('category-projects-container');
+    if (!trips.length) { box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">此分類目前沒有旅遊專案</p>'; return; }
+    box.innerHTML = trips.map(t => `
+      <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between" data-id="${esc(t.id)}">
+        <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" data-act="open">
+          <img src="${esc(t.coverPhoto || DEFAULT_IMG)}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
+          <div class="min-w-0"><h4 class="font-bold text-slate-800 text-xs truncate">${(t.collaborators || []).length ? '<span class="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-bold mr-1">共編</span>' : ''}${esc(t.title)}</h4>
+          <p class="text-[10px] text-slate-500 truncate">${esc(t.startDate)} ~ ${esc(t.endDate)} | ${esc(t.destination)}</p></div></div>
+        <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          <button data-act="open" class="bg-amber-500 text-white text-[10px] px-2.5 py-1 rounded-lg font-bold">開啟</button>
+          <button data-act="del" class="text-slate-400 hover:text-red-500 p-1.5"><i class="fa-solid fa-trash-can"></i></button></div></div>`).join('');
+    box.onclick = async e => {
+      const b = e.target.closest('[data-act]'), row = e.target.closest('[data-id]');
+      if (!b || !row) return;
+      const id = row.dataset.id;
+      if (b.dataset.act === 'open') return openTripById(id);
+      if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
+      localStorage.removeItem('local_trip_' + id);
+      try { if (supabaseClient && currentUser) await supabaseClient.from('trips').delete().eq('id', id); } catch (err) {}
+      if (id === currentTripId) { currentTripId = 'default_trip'; currentTripData = getInitialTripData(); localStorage.removeItem('last_trip_id'); }
+      showToast('專案已刪除', 'info');
+      openLandingCategory(lastCategory);
+    };
+  };
+
+  /* ============ 5. 行程、花費、行李清單：防 XSS（改用 data-id 事件委派） ============ */
+  window.renderItineraryTimeline = function () {
+    const box = $('itinerary-timeline'); if (!box) return;
+    const evs = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    if (!evs.length) { box.innerHTML = `<div class="text-center py-6 text-slate-400 bg-white rounded-xl text-xs border border-slate-200">第 ${activeDayTab} 天尚無行程</div>`; return; }
+    box.innerHTML = evs.map((it, i) => `
+      <div data-id="${esc(it.id)}" class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-start justify-between gap-2 text-xs cursor-pointer">
+        <div class="flex items-start gap-2 flex-1 min-w-0"><span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">${i + 1}</span>
+          <div class="min-w-0 flex-1"><div class="flex items-center gap-1"><span class="font-mono text-slate-500 text-[10px] font-bold">${esc(it.time)}</span><h4 class="font-bold text-slate-800 truncate">${esc(it.title)}</h4></div>
+          ${it.address ? `<p class="text-slate-500 text-[10px] truncate"><i class="fa-solid fa-map-pin text-amber-600 mr-0.5"></i>${esc(it.address)}</p>` : ''}</div></div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">${it.cost > 0 ? `<span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">NT$ ${Number(it.cost).toLocaleString()}</span>` : ''}
+          <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button></div></div>`).join('');
+    box.onclick = e => {
+      const row = e.target.closest('[data-id]'); if (!row) return;
+      if (e.target.closest('[data-act="del"]')) { if (confirm('確定刪除此行程？（連動的花費也會一併刪除）')) deleteItineraryItem(row.dataset.id); }
+      else editItineraryItem(row.dataset.id);
+    };
+  };
+
+  window.populateExpenseFilterOptions = function () {
+    const ex = currentTripData.expenses || [];
+    const fill = (id, all, vals, label) => {
+      const s = $(id); if (!s) return; const cur = s.value;
+      s.innerHTML = `<option value="ALL">${all}</option>` + vals.map(v => `<option value="${esc(v)}">${esc(label ? label(v) : v)}</option>`).join('');
+      if (vals.includes(cur)) s.value = cur;
+    };
+    fill('expense-filter-date', '全部日期', [...new Set(ex.map(e => e.date).filter(Boolean))].sort());
+    fill('expense-filter-category', '全部分類', [...new Set([...Object.keys(PRESET_CATEGORIES), ...ex.map(e => e.category)])], getCategoryLabel);
+    fill('expense-filter-payer', '全部付款', [...new Set(ex.map(e => e.payer).filter(Boolean))].sort());
+  };
+
+  window.renderExpenses = function () {
+    populateExpenseFilterOptions();
+    const all = currentTripData.expenses || [];
+    const v = id => ($(id) ? $(id).value : 'ALL');
+    const d = v('expense-filter-date'), c = v('expense-filter-category'), p = v('expense-filter-payer');
+    const list = all.filter(e => (d === 'ALL' || e.date === d) && (c === 'ALL' || e.category === c) && (p === 'ALL' || e.payer === p));
+    const total = list.reduce((s, e) => s + Number(e.amount), 0);
+    const overall = all.reduce((s, e) => s + Number(e.amount), 0);
+    setElText('total-spent-display', 'NT$ ' + total.toLocaleString());
+    setElText('remaining-budget-display', 'NT$ ' + (Number(currentTripData.budget || 0) - overall).toLocaleString());
+    setElText('per-person-display', 'NT$ ' + Math.round(total / (Number(currentTripData.members) || 1)).toLocaleString());
+    const box = $('expense-list-container');
+    if (box) {
+      box.innerHTML = list.length ? list.slice().reverse().map(it => `
+        <div data-id="${esc(it.id)}" class="bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] cursor-pointer">
+          <div class="min-w-0"><span class="font-bold text-slate-800">${esc(it.title)}</span><p class="text-[9px] text-slate-400">${esc(it.date)} | 付款: ${esc(it.payer)} | 模式: ${it.splitMode === 'payer_excluded' ? '代墊' : '均分'}</p></div>
+          <div class="flex items-center gap-1.5"><span class="font-bold text-emerald-600">NT$ ${Number(it.amount).toLocaleString()}</span>
+          <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button></div></div>`).join('')
+        : '<p class="text-[11px] text-slate-400 text-center py-3">無記帳紀錄</p>';
+      box.onclick = e => {
+        const row = e.target.closest('[data-id]'); if (!row) return;
+        if (e.target.closest('[data-act="del"]')) { if (confirm('確定刪除此筆花費？')) deleteExpenseItem(row.dataset.id); }
+        else editExpenseItem(row.dataset.id);
+      };
+    }
+    renderSettlementSummary(all);          // 結算永遠以「全部支出」計算，不受篩選影響
+    renderExpensePieChart(list, total);
+  };
+
+  window.renderChecklist = function () {
+    const list = currentTripData.checklist || [], box = $('checklist-container'); if (!box) return;
+    const done = list.filter(i => i.done).length, pct = list.length ? Math.round(done / list.length * 100) : 0;
+    setElText('checklist-progress-text', `${done} / ${list.length} (${pct}%)`);
+    if ($('checklist-progress-bar')) $('checklist-progress-bar').style.width = pct + '%';
+    box.innerHTML = list.map(i => `
+      <div data-id="${esc(i.id)}" class="p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs shadow-sm cursor-pointer ${i.done ? 'bg-emerald-50/50 text-slate-400 line-through' : 'bg-white text-slate-800'}">
+        <div class="flex items-center gap-2"><i class="fa-regular ${i.done ? 'fa-square-check text-emerald-600' : 'fa-square text-slate-400'} text-sm"></i><span>${esc(i.text)}</span></div>
+        <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button></div>`).join('');
+    box.onclick = e => {
+      const row = e.target.closest('[data-id]'); if (!row) return;
+      if (e.target.closest('[data-act="del"]')) return deleteChecklistItem(row.dataset.id);
+      const it = list.find(x => x.id === row.dataset.id); if (it) { it.done = !it.done; saveTripToCloud(); }
+    };
+  };
+
+  /* ============ 6. Excel：範本函式原本不存在；時間／類型解析 ============ */
+  window.downloadExcelTemplate = function () {
+    const rows = [['天數', '時間', '景點名稱', '地址', '類型', '花費(TWD)', '備註'],
+      [1, '09:30', '關西國際機場', '關西國際機場', '交通', 1200, '搭乘特急'],
+      [1, '16:00', '清水寺', '京都市東山區清水1丁目', '景點', 400, '']];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '行程');
+    XLSX.writeFile(wb, '旅書行程範本.xlsx');
+  };
+  const TYPE_MAP = { 景點: 'sightseeing', 美食: 'food', 交通: 'transport', 住宿: 'hotel', 購物: 'shopping' };
+  window.handleExcelFileUpload = function (e) {
+    const file = e.target.files[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        parsedExcelEvents = [];
+        for (let i = 1; i < json.length; i++) {
+          const row = json[i]; if (!row || !row[2]) continue;
+          let t = row[1];
+          if (typeof t === 'number') { const m = Math.round(t * 1440); t = `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`; }   // Excel 時間為小數
+          t = String(t || '09:00').trim();
+          const ty = String(row[4] || '').trim();
+          parsedExcelEvents.push({ id: 'xl_' + Date.now() + '_' + i, day: Number(row[0]) || 1, time: t, title: String(row[2]),
+            address: String(row[3] || row[2]), type: TYPE_MAP[ty] || (Object.values(TYPE_MAP).includes(ty) ? ty : 'sightseeing'),
+            cost: Number(row[5]) || 0, notes: String(row[6] || '') });
+        }
+        setElText('excel-preview-count', parsedExcelEvents.length);
+        $('excel-preview-table').innerHTML = parsedExcelEvents.map(it => `<div>Day ${it.day} [${esc(it.time)}] ${esc(it.title)}</div>`).join('');
+        $('excel-preview-area').classList.remove('hidden');
+        $('excel-confirm-btn').disabled = !parsedExcelEvents.length;
+        showToast('解析成功', 'success');
+      } catch (err) { showToast('解析失敗', 'error'); }
+    };
+    r.readAsArrayBuffer(file);
+  };
+
+  /* ============ 7. 地圖：原本標記座標是假的（固定偏移），改為真實地理編碼 ============ */
+  const geo = (() => { try { return JSON.parse(localStorage.getItem('geo_cache') || '{}'); } catch (e) { return {}; } })();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let mapRun = 0;
+  async function geocode(q) {
+    try {
+      const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q));
+      const j = await r.json();
+      geo[q] = j[0] ? [+j[0].lat, +j[0].lon] : null;
+      localStorage.setItem('geo_cache', JSON.stringify(geo));
+    } catch (e) { return undefined; }
+    return geo[q];
+  }
+  window.updateLeafletMapMarkers = async function () {
+    if (!leafletMap) initLeafletMap();
+    if (!leafletMap || !mapMarkersLayer) return;
+    const pg = $('page-2');
+    if (pg && pg.classList.contains('hidden')) return;     // 行程頁未顯示時不查詢，避免白白呼叫 Nominatim
+    const run = ++mapRun;
+    setTimeout(() => leafletMap.invalidateSize(), 100);
+    mapMarkersLayer.clearLayers();
+    const evs = (currentTripData.itinerary || []).filter(e => Number(e.day) === activeDayTab && e.address).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    const pts = [];
+    for (const it of evs) {
+      let c = geo[it.address];
+      if (c === undefined) { await sleep(1100); if (run !== mapRun) return; c = await geocode(it.address); }   // Nominatim 限速每秒 1 次
+      if (run !== mapRun) return;
+      if (c) {
+        L.marker(c).bindPopup(`<b>${esc(it.title)}</b><br>${esc(it.address)}`).addTo(mapMarkersLayer);
+        pts.push(c); leafletMap.fitBounds(pts, { maxZoom: 15, padding: [20, 20] });
+      }
+    }
+  };
+
+  /* ============ 8. 導覽：缺少匯出頁按鈕、底部選取狀態、滑動誤觸、日期分頁越界 ============ */
+  const nav = document.querySelector('nav');
+  if (nav && !$('nav-btn-5')) {
+    const b = document.createElement('button');
+    b.id = 'nav-btn-5'; b.onclick = () => goToPage(5);
+    b.className = 'flex flex-col items-center gap-0.5 text-[10px] font-bold';
+    b.innerHTML = '<i class="fa-solid fa-cloud-arrow-down text-base"></i> <span>匯出</span>';
+    nav.appendChild(b);
+  }
+  function markNav(active) {
+    ['home', 1, 2, 3, 4, 5].forEach(k => { const b = $('nav-btn-' + k); if (b) { b.classList.toggle('text-amber-600', k === active); b.classList.toggle('text-slate-400', k !== active); } });
+  }
+  const _goToPage = window.goToPage;
+  window.goToPage = function (p) { _goToPage(p); if (p >= 1 && p <= totalPages) markNav(p); };
+  const _goHome = window.goHomeLanding;
+  window.goHomeLanding = async function () { markNav('home'); return _goHome(); };
+
+  const _renderDayTabs = window.renderDayTabs;
+  window.renderDayTabs = function () {
+    _renderDayTabs();
+    const n = $('day-tabs-container').children.length;
+    if (activeDayTab > n) { activeDayTab = 1; _renderDayTabs(); }
+  };
+
+  window.setupTouchSwipe = function () {
+    const mc = $('main-swipe-area'); if (!mc) return;
+    let x0 = 0, y0 = 0, skip = false;
+    mc.addEventListener('touchstart', e => {
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+      skip = !!e.target.closest('#day-tabs-container,#leaflet-map-container,#expense-list-container,input,textarea,select,#page-home,#page-category-list');
+    });
+    mc.addEventListener('touchend', e => {
+      if (skip) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      goToPage(currentPage + (dx < 0 ? 1 : -1));
+    });
+  };
+
+  /* ============ 9. 記帳表單：原生驗證在部分手機瀏覽器不會顯示提示，造成「按了沒反應」 ============ */
+  ['add-expense-modal', 'add-event-modal'].forEach(id => { const f = document.querySelector('#' + id + ' form'); if (f) f.noValidate = true; });
+  ['expense-amount', 'event-cost'].forEach(id => { if ($(id)) $(id).step = 'any'; });   // 預設 step=1 會擋掉小數金額
+  const _addExpense = window.handleAddExpense;
+  window.handleAddExpense = function (e) {
+    e.preventDefault();
+    const miss = [['expense-title', '請輸入項目名稱'], ['expense-amount', '請輸入金額'], ['expense-date', '請選擇日期'],
+                  ['expense-payer', '請填寫實際付款人'], ['expense-participants', '請填寫參與分攤成員']]
+      .find(([id]) => !$(id).value.trim());
+    if (miss) { showToast(miss[1], 'error'); $(miss[0]).focus(); return; }
+    if (!(Number($('expense-amount').value) > 0)) { showToast('金額必須大於 0', 'error'); return; }
+    if (!Array.isArray(currentTripData.expenses)) currentTripData.expenses = [];
+    try { _addExpense(e); } catch (err) { console.error(err); showToast('儲存失敗：' + err.message, 'error'); }
+  };
+
+  /* ============ 10. 其他防呆：第幾天下拉為空時行程會變成第 0 天 ============ */
+  const _addEvent = window.handleAddEvent;
+  window.handleAddEvent = function (e) {
+    e.preventDefault();
+    const sel = $('event-day-select');
+    if (!sel.options.length) renderDayTabs();                       // 尚未渲染過時補建選項
+    if (!(Number(sel.value) >= 1)) sel.value = '1';
+    if (!$('event-title').value.trim()) { showToast('請輸入景點名稱', 'error'); return; }
+    if (!$('event-time').value) { showToast('請選擇時間', 'error'); return; }
+    if (!Array.isArray(currentTripData.expenses)) currentTripData.expenses = [];
+    if (!Array.isArray(currentTripData.itinerary)) currentTripData.itinerary = [];
+    try { _addEvent(e); } catch (err) { console.error(err); showToast('儲存失敗：' + err.message, 'error'); }
+  };
+  try { renderTripData(); } catch (e) { console.error(e); }          // 首次載入就渲染一次，避免選單與清單為空
+
+  /* ============ 11. 其餘防呆 ============ */
+  // 成員名單預設值：取自本專案已出現的人名，不再硬塞「小明, 小華, 小美」
+  function knownPeople() {
+    const set = new Set();
+    (currentTripData.expenses || []).forEach(e => { if (e.payer) set.add(String(e.payer).trim()); (e.participants || []).forEach(p => p && set.add(String(p).trim())); });
+    return [...set].filter(Boolean).join(', ');
+  }
+  const _openAddExpense = window.openAddExpenseModal;
+  window.openAddExpenseModal = function () { _openAddExpense(); $('expense-participants').value = knownPeople(); };
+  const _openAddEvent = window.openAddEventModal;
+  window.openAddEventModal = function () { _openAddEvent(); $('event-expense-participants').value = knownPeople(); };
+
+  // 行程要連動記帳時，付款人與分攤成員必須填寫（原本會偷偷用「小明」補上）
+  const _addEvent2 = window.handleAddEvent;
+  window.handleAddEvent = function (e) {
+    e.preventDefault();
+    const cost = Number($('event-cost').value) || 0;
+    if (cost > 0 && $('event-link-expense').checked) {
+      if (!$('event-expense-payer').value.trim()) { showToast('有花費金額時，請填寫實際付款人（或取消勾選同步記帳）', 'error'); $('event-expense-payer').focus(); return; }
+      if (!$('event-expense-participants').value.trim()) { showToast('請填寫參與分攤成員', 'error'); $('event-expense-participants').focus(); return; }
+    }
+    _addEvent2(e);
+  };
+
+  // 日期檢查：結束日不可早於開始日
+  const _saveTrip = window.handleSaveTripDetails;
+  window.handleSaveTripDetails = function (e) {
+    if ($('input-trip-end').value < $('input-trip-start').value) { e.preventDefault(); showToast('結束日期不可早於開始日期', 'error'); return; }
+    _saveTrip(e);
+  };
+  const _createTrip = window.handleCreateNewProject;
+  window.handleCreateNewProject = function (e) {
+    if ($('new-trip-end').value < $('new-trip-start').value) { e.preventDefault(); showToast('結束日期不可早於開始日期', 'error'); return; }
+    _createTrip(e);
+  };
+})();
+</script>
+
 </body>
 </html>

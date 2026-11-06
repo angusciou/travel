@@ -527,7 +527,9 @@
                             <option value="sightseeing">⛩️ 景點</option><option value="food">🍜 美食</option><option value="transport">🚌 交通</option><option value="hotel">🏨 住宿</option><option value="shopping">🛍️ 購物</option>
                         </select>
                     </div>
-                    <div><label class="block font-bold text-slate-700 mb-1">花費金額 (TWD)</label><input type="number" id="event-cost" value="0" min="0" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">花費金額</label>
+                        <div class="flex gap-1"><input type="number" id="event-cost" value="0" min="0" class="min-w-0 flex-1 border border-slate-200 rounded p-1.5 outline-none"><select id="event-currency" class="border border-slate-200 rounded p-1 bg-slate-50 outline-none"><option value="TWD">台幣</option><option value="JPY">日圓</option></select></div>
+                        <p id="event-conv-hint" class="text-[10px] text-slate-400 mt-0.5"></p></div>
                 </div>
 
                 <!-- 整合花費分帳連動區塊 -->
@@ -543,6 +545,7 @@
                             <select id="event-expense-split-mode" class="w-full border border-emerald-200 bg-white rounded p-1 outline-none">
                                 <option value="normal">均分模式</option>
                                 <option value="payer_excluded">代墊模式(不含付款人)</option>
+                                <option value="self">自行付款(無需分攤)</option>
                             </select>
                         </div>
                     </div>
@@ -566,7 +569,9 @@
                 <input type="hidden" id="expense-edit-id" value="">
                 <div><label class="block font-bold text-slate-700 mb-1">項目名稱</label><input type="text" id="expense-title" required placeholder="例: 幫買伴手禮" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div class="grid grid-cols-2 gap-2">
-                    <div><label class="block font-bold text-slate-700 mb-1">金額 (TWD)</label><input type="number" id="expense-amount" required min="1" placeholder="1500" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">金額</label>
+                        <div class="flex gap-1"><input type="number" id="expense-amount" required min="1" placeholder="1500" class="min-w-0 flex-1 border border-slate-200 rounded p-1.5 outline-none"><select id="expense-currency" class="border border-slate-200 rounded p-1 bg-slate-50 outline-none"><option value="TWD">台幣</option><option value="JPY">日圓</option></select></div>
+                        <p id="expense-conv-hint" class="text-[10px] text-slate-400 mt-0.5"></p></div>
                     <div><label class="block font-bold text-slate-700 mb-1">日期</label><input type="date" id="expense-date" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
@@ -583,6 +588,7 @@
                     <select id="expense-split-mode" class="w-full border border-slate-200 rounded p-1.5 outline-none bg-slate-50">
                         <option value="normal">均分模式 (付款人也參與分攤)</option>
                         <option value="payer_excluded">代墊模式 (付款人不需付錢，僅分攤人還款)</option>
+                        <option value="self">自行付款 (付款人自己負擔，不需分攤、不產生欠款)</option>
                     </select>
                 </div>
                 <div>
@@ -1691,7 +1697,7 @@
                 row.innerHTML = `
                     <div class="flex justify-between text-[11px] font-bold text-slate-700">
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${color}"></span>${esc(label)}</span>
-                        <span>NT$ ${amt.toLocaleString()} (${pct}%)</span>
+                        <span>${window.__dispSym || 'NT$ '}${(Math.round(amt * 100) / 100).toLocaleString()} (${pct}%)</span>
                     </div>
                     <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div class="h-full rounded-full transition-all duration-300" style="width: ${pct}%; background:${color}"></div>
@@ -1742,7 +1748,7 @@
         function renderSummarySheet() {
             setElText('summary-trip-title', currentTripData.title);
             const total = (currentTripData.expenses || []).reduce((s, e) => s + Number(e.amount), 0);
-            setElText('summary-trip-info', `日期: ${currentTripData.startDate}~${currentTripData.endDate} | 總花費: NT$ ${total.toLocaleString()}`);
+            setElText('summary-trip-info', `日期: ${currentTripData.startDate}~${currentTripData.endDate} | 總花費: ${window.fxSummaryTotal ? window.fxSummaryTotal() : 'NT$ ' + total.toLocaleString()}`);
         }
 
         window.handleExcelFileUpload = function(e) {
@@ -1889,12 +1895,13 @@
             const address = document.getElementById('event-address').value;
             const type = document.getElementById('event-type').value;
             const cost = Number(document.getElementById('event-cost').value) || 0;
+            const costCurrency = (document.getElementById('event-currency') || {}).value === 'JPY' ? 'JPY' : 'TWD';
             
             const linkExpense = document.getElementById('event-link-expense').checked;
             const expPayer = document.getElementById('event-expense-payer').value.trim();
             const expSplitMode = document.getElementById('event-expense-split-mode').value;
             const partsStr = document.getElementById('event-expense-participants').value;
-            const expParticipants = partsStr ? partsStr.split(',').map(s => s.trim()).filter(Boolean) : ['小明', '小華', '小美'];
+            const expParticipants = expSplitMode === 'self' ? [expPayer] : (partsStr ? partsStr.split(',').map(s => s.trim()).filter(Boolean) : ['小明', '小華', '小美']);
 
             const startDateObj = new Date(currentTripData.startDate);
             startDateObj.setUTCDate(startDateObj.getUTCDate() + (day - 1));
@@ -1909,6 +1916,7 @@
                     item.address = address;
                     item.type = type;
                     item.cost = cost;
+                    item.costCurrency = costCurrency;
                     item.expensePayer = expPayer;
                     item.expenseSplitMode = expSplitMode;
                     item.expenseParticipants = expParticipants;
@@ -1920,6 +1928,7 @@
                             if (exItem) {
                                 exItem.title = title;
                                 exItem.amount = cost;
+                                exItem.currency = costCurrency;
                                 exItem.date = eventDateStr;
                                 exItem.payer = expPayer || '小明';
                                 exItem.category = type;
@@ -1929,7 +1938,7 @@
                                 const newExId = 'ex_' + Date.now();
                                 item.linkedExpenseId = newExId;
                                 currentTripData.expenses.push({
-                                    id: newExId, title, amount: cost, date: eventDateStr,
+                                    id: newExId, title, amount: cost, currency: costCurrency, date: eventDateStr,
                                     payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
                                 });
                             }
@@ -1937,7 +1946,7 @@
                             const newExId = 'ex_' + Date.now();
                             item.linkedExpenseId = newExId;
                             currentTripData.expenses.push({
-                                id: newExId, title, amount: cost, date: eventDateStr,
+                                id: newExId, title, amount: cost, currency: costCurrency, date: eventDateStr,
                                 payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
                             });
                         }
@@ -1954,13 +1963,13 @@
                 if (cost > 0 && linkExpense) {
                     linkedExId = 'ex_' + Date.now();
                     currentTripData.expenses.push({
-                        id: linkedExId, title, amount: cost, date: eventDateStr,
+                        id: linkedExId, title, amount: cost, currency: costCurrency, date: eventDateStr,
                         payer: expPayer || '小明', category: type, splitMode: expSplitMode, participants: expParticipants
                     });
                 }
 
                 currentTripData.itinerary.push({
-                    id: newEvId, day, time, title, address, type, cost, notes: '',
+                    id: newEvId, day, time, title, address, type, cost, costCurrency, notes: '',
                     linkedExpenseId: linkedExId,
                     syncDismissed: cost > 0 && !linkExpense,
                     expensePayer: expPayer,
@@ -2021,6 +2030,7 @@
             const editId = editIdEl ? editIdEl.value : '';
             const title = document.getElementById('expense-title').value;
             const amount = Number(document.getElementById('expense-amount').value);
+            const currency = (document.getElementById('expense-currency') || {}).value === 'JPY' ? 'JPY' : 'TWD';
             const date = document.getElementById('expense-date').value;
             const payer = document.getElementById('expense-payer').value.trim();
             const cat = document.getElementById('expense-category').value;
@@ -2033,6 +2043,7 @@
                 if (item) {
                     item.title = title;
                     item.amount = amount;
+                    item.currency = currency;
                     item.date = date;
                     item.payer = payer;
                     item.category = cat;
@@ -2041,7 +2052,7 @@
                 }
                 showToast('記帳修改成功', 'success');
             } else {
-                currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, date, payer, category: cat, splitMode, participants });
+                currentTripData.expenses.push({ id: 'ex_' + Date.now(), title, amount, currency, date, payer, category: cat, splitMode, participants });
                 showToast('記帳新增成功', 'success');
             }
 
@@ -2237,16 +2248,37 @@
   const fmt = c => { const a = c / 100; return a.toLocaleString('zh-TW', { minimumFractionDigits: Number.isInteger(a) ? 0 : 2, maximumFractionDigits: 2 }); };
   const DEFAULT_IMG = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80';
 
-  /* ============ 1. 智慧結算：兩人之間可抵銷，不跨人轉嫁 ============ */
-  // 每筆支出各自產生「誰 → 付款人」的債務，彼此完全獨立
-  function expenseDebts(expenses) {
-    const out = [];
+  /* ---------- 幣別工具：台幣(TWD) / 日圓(JPY)。匯率存成「1 日圓 = ? 台幣」 ---------- */
+  const CUR = { TWD: { sym: 'NT$ ', scale: 100, name: '台幣' }, JPY: { sym: '¥', scale: 1, name: '日圓' } };
+  const curOf = c => (c === 'JPY' ? 'JPY' : 'TWD');
+  const getRate = () => { const r = Number(currentTripData.jpyRate); return r > 0 ? r : 0; };
+  const dispCur = () => curOf(currentTripData.displayCurrency);
+  function convert(amount, from, to) {
+    amount = Number(amount) || 0; from = curOf(from); to = curOf(to);
+    if (from === to) return amount;
+    const r = getRate(); if (!r) return NaN;
+    return from === 'JPY' ? amount * r : amount / r;
+  }
+  const needRate = expenses => !getRate() && (expenses || []).some(e => curOf(e.currency) !== dispCur());
+  const fmtNum = (n, cur) => curOf(cur) === 'JPY' ? Math.round(n).toLocaleString('zh-TW') : n.toLocaleString('zh-TW', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
+  const fmtMoney = (n, cur) => CUR[curOf(cur)].sym + fmtNum(n, cur);
+  window.fxSummaryTotal = () => {
+    const all = currentTripData.expenses || [], cur = dispCur();
+    if (needRate(all)) return '尚未設定匯率';
+    return fmtMoney(all.reduce((s, e) => s + (convert(e.amount, e.currency, cur) || 0), 0), cur);
+  };
+
+  /* ============ 1. 智慧結算：兩人之間可抵銷，不跨人轉嫁；所有金額先統一換算成「結算幣別」再計算 ============ */
+  // cur：結算幣別。每筆支出先換算成結算幣別（台幣取到分、日圓取整數），再依分攤方式拆帳
+  function expenseDebts(expenses, cur) {
+    const scale = CUR[cur].scale, out = [];
     (expenses || []).forEach(ex => {
-      if (!ex) return;
+      if (!ex || ex.splitMode === 'self') return;                       // 自行付款：不需分攤、不產生欠款
       const payer = String(ex.payer || '').trim();
-      const amount = Number(ex.amount);
-      if (!payer || !Number.isFinite(amount) || amount <= 0) return;
-      const total = Math.round(amount * 100);
+      const conv = convert(ex.amount, ex.currency, cur);
+      if (!payer || !Number.isFinite(conv) || conv <= 0) return;
+      const total = Math.round(conv * scale);
+      if (total <= 0) return;
       let parts = [...new Set((Array.isArray(ex.participants) ? ex.participants : []).map(p => String(p || '').trim()).filter(Boolean))];
       if (ex.splitMode === 'payer_excluded') parts = parts.filter(p => p !== payer);
       else if (!parts.includes(payer)) parts.push(payer);
@@ -2256,8 +2288,8 @@
       parts.forEach(p => {
         const share = base + (rem > 0 ? 1 : 0);
         if (rem > 0) rem--;
-        if (p === payer) return;                       // 付款人自己的份額不欠自己
-        out.push({ debtor: p, creditor: payer, cents: share, exId: ex.id, title: ex.title, date: ex.date });
+        if (p === payer) return;
+        out.push({ debtor: p, creditor: payer, cents: share, exId: ex.id, title: ex.title, date: ex.date, from: curOf(ex.currency), orig: Number(ex.amount) });
       });
     });
     return out;
@@ -2267,17 +2299,18 @@
     const box = $('settlement-container');
     if (!box) return;
     const oldBar = $('settle-mode-toggle'); if (oldBar) oldBar.remove();
+    const cur = dispCur(), scale = CUR[cur].scale, F = u => fmtMoney(u / scale, cur);
 
+    if (needRate(expenses)) { box.innerHTML = '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-center py-2 px-2">有不同幣別的支出，請先在上方設定匯率才能統一換算結算。</p>'; return; }
     let debts;
-    try { debts = expenseDebts(expenses || []); }
+    try { debts = expenseDebts(expenses || [], cur); }
     catch (err) { console.error(err); box.innerHTML = '<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>'; return; }
 
-    // 只在「同一組兩個人」之間抵銷；A↔B 的債務不會被轉嫁給 C
     const pairMap = {};
     debts.forEach(t => {
       const [x, y] = [t.debtor, t.creditor].sort();
       const g = pairMap[x + '\u0000' + y] = pairMap[x + '\u0000' + y] || { x, y, xy: 0, yx: 0, items: [] };
-      if (t.debtor === x) g.xy += t.cents; else g.yx += t.cents;      // xy: x 欠 y；yx: y 欠 x
+      if (t.debtor === x) g.xy += t.cents; else g.yx += t.cents;
       g.items.push(t);
     });
     const list = [];
@@ -2290,7 +2323,7 @@
 
     if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
     const paid = currentTripData.settlementsPaid;
-    const keyOf = t => JSON.stringify([t.debtor, t.creditor, t.cents]);
+    const keyOf = t => JSON.stringify([t.debtor, t.creditor, t.cents, cur]);       // 金額與幣別任一改變，已還款勾選就失效，避免誤判
 
     const sum = {};
     const S = n => (sum[n] = sum[n] || { pay: 0, recv: 0 });
@@ -2298,22 +2331,24 @@
     const totalAll = list.reduce((s, t) => s + t.cents, 0);
     const unpaid = list.filter(t => !paid[keyOf(t)]).reduce((s, t) => s + t.cents, 0);
     const netSum = Object.values(sum).reduce((s, v) => s + v.recv - v.pay, 0);
+    const mixed = (expenses || []).some(e => curOf(e.currency) !== cur);
+    const rateNote = mixed ? `<div class="text-[10px] text-slate-500">所有金額已統一換算為${CUR[cur].name}（1 日圓 = ${getRate()} 台幣）後計算。</div>` : '';
 
-    let html = `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] flex justify-between"><span>尚未結清</span><span class="font-bold text-amber-700">NT$ ${fmt(unpaid)} / ${fmt(totalAll)}</span></div>
-      <div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。</div>`;
+    let html = `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] flex justify-between"><span>尚未結清（${CUR[cur].name}）</span><span class="font-bold text-amber-700">${F(unpaid)} / ${F(totalAll)}</span></div>
+      <div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。「自行付款」的支出不列入結算。</div>${rateNote}`;
 
     const byDebtor = {};
     list.forEach(t => (byDebtor[t.debtor] = byDebtor[t.debtor] || []).push(t));
     Object.keys(byDebtor).sort().forEach(d => {
-      html += `<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700 flex justify-between"><span>${esc(d)} 應付</span><span>NT$ ${fmt(sum[d].pay)}</span></div>`;
+      html += `<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700 flex justify-between"><span>${esc(d)} 應付</span><span>${F(sum[d].pay)}</span></div>`;
       byDebtor[d].sort((a, b) => a.creditor.localeCompare(b.creditor)).forEach(t => {
         const k = keyOf(t), done = !!paid[k], g = t.g;
         const line = (from, to) => g.items.filter(i => i.debtor === from && i.creditor === to)
-          .map(i => `${esc(from)} 欠 ${esc(to)}：${esc(i.title)} ${fmt(i.cents)}`).join('；');
+          .map(i => `${esc(from)} 欠 ${esc(to)}：${esc(i.title)} ${F(i.cents)}${i.from !== cur ? `（原 ${fmtMoney(i.orig, i.from)}）` : ''}`).join('；');
         const fwd = line(t.debtor, t.creditor), back = line(t.creditor, t.debtor);
         const detail = [fwd, back].filter(Boolean).join('<br>') + (back ? '<br>→ 抵銷後如上' : '');
         html += `<div class="px-2 py-1.5 border-t border-slate-100 ${done ? 'bg-emerald-50/70 text-slate-400 line-through' : 'text-slate-800'}">
-          <div class="flex items-center justify-between"><label class="flex items-center gap-2 min-w-0 cursor-pointer"><input type="checkbox" data-key="${esc(k)}" ${done ? 'checked' : ''} class="w-4 h-4 accent-amber-600 flex-shrink-0"><span>${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span></label><span class="font-bold text-emerald-700 whitespace-nowrap">NT$ ${fmt(t.cents)}</span></div>
+          <div class="flex items-center justify-between"><label class="flex items-center gap-2 min-w-0 cursor-pointer"><input type="checkbox" data-key="${esc(k)}" ${done ? 'checked' : ''} class="w-4 h-4 accent-amber-600 flex-shrink-0"><span>${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span></label><span class="font-bold text-emerald-700 whitespace-nowrap">${F(t.cents)}</span></div>
           <p class="text-[9px] text-slate-400 ml-6 leading-relaxed">${detail}</p></div>`;
       });
       html += '</div>';
@@ -2322,9 +2357,9 @@
     html += '<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700">每人收支總表</div>';
     Object.keys(sum).sort().forEach(n => {
       const v = sum[n], net = v.recv - v.pay;
-      html += `<div class="px-2 py-1 border-t border-slate-100 flex justify-between"><span class="font-bold">${esc(n)}</span><span class="text-[10px] text-slate-500">應付 ${fmt(v.pay)}｜應收 ${fmt(v.recv)}</span><span class="font-bold ${net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-slate-400'}">${net > 0 ? '+' : ''}${fmt(net)}</span></div>`;
+      html += `<div class="px-2 py-1 border-t border-slate-100 flex justify-between"><span class="font-bold">${esc(n)}</span><span class="text-[10px] text-slate-500">應付 ${F(v.pay)}｜應收 ${F(v.recv)}</span><span class="font-bold ${net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-slate-400'}">${net > 0 ? '+' : ''}${F(net)}</span></div>`;
     });
-    html += `<div class="px-2 py-1 border-t border-slate-200 text-[10px] ${netSum === 0 ? 'text-emerald-600' : 'text-red-500'}">全體淨額加總：${fmt(netSum)} ${netSum === 0 ? '✓ 收支平衡' : '✗ 不平衡'}</div></div>`;
+    html += `<div class="px-2 py-1 border-t border-slate-200 text-[10px] ${netSum === 0 ? 'text-emerald-600' : 'text-red-500'}">全體淨額加總：${F(netSum)} ${netSum === 0 ? '✓ 收支平衡' : '✗ 不平衡'}</div></div>`;
 
     box.innerHTML = html;
     box.onchange = e => { const k = e.target.dataset && e.target.dataset.key; if (k !== undefined) window.toggleSettlementPaid(k, e.target.checked); };
@@ -2398,7 +2433,7 @@
     (currentTripData.itinerary || []).forEach(it => {
       if (!it.linkedExpenseId) return;
       const ex = (currentTripData.expenses || []).find(x => x.id === it.linkedExpenseId);
-      if (ex) { it.cost = Number(ex.amount); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
+      if (ex) { it.cost = Number(ex.amount); it.costCurrency = curOf(ex.currency); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
     });
     if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
       store.remove('local_trip_default_trip');
@@ -2571,7 +2606,7 @@
         <div class="flex items-start gap-2 flex-1 min-w-0"><span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">${i + 1}</span>
           <div class="min-w-0 flex-1"><div class="flex items-center gap-1"><span class="font-mono text-slate-500 text-[10px] font-bold">${esc(it.time)}</span><h4 class="font-bold text-slate-800 truncate">${esc(it.title)}</h4></div>
           ${it.address ? `<p class="text-slate-500 text-[10px] truncate"><i class="fa-solid fa-map-pin text-amber-600 mr-0.5"></i>${esc(it.address)}</p>` : ''}</div></div>
-        <div class="flex items-center gap-1.5 flex-shrink-0">${it.cost > 0 ? `<span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">NT$ ${Number(it.cost).toLocaleString()}</span>` : ''}
+        <div class="flex items-center gap-1.5 flex-shrink-0">${it.cost > 0 ? `<span class="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">${CUR[curOf(it.costCurrency)].sym}${Number(it.cost).toLocaleString()}</span>` : ''}
           <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button></div></div>`).join('');
     box.onclick = e => {
       const row = e.target.closest('[data-id]'); if (!row) return;
@@ -2594,22 +2629,29 @@
 
   window.renderExpenses = function () {
     populateExpenseFilterOptions();
+    ensureFxCard();
     const all = currentTripData.expenses || [];
     const v = id => ($(id) ? $(id).value : 'ALL');
     const d = v('expense-filter-date'), c = v('expense-filter-category'), p = v('expense-filter-payer');
     const list = all.filter(e => (d === 'ALL' || e.date === d) && (c === 'ALL' || e.category === c) && (p === 'ALL' || e.payer === p));
-    const total = list.reduce((s, e) => s + Number(e.amount), 0);
-    const overall = all.reduce((s, e) => s + Number(e.amount), 0);
-    setElText('total-spent-display', 'NT$ ' + total.toLocaleString());
-    setElText('remaining-budget-display', 'NT$ ' + (Number(currentTripData.budget || 0) - overall).toLocaleString());
-    setElText('per-person-display', 'NT$ ' + Math.round(total / (Number(currentTripData.members) || 1)).toLocaleString());
+    const cur = dispCur(), blocked = needRate(all);
+    window.__dispSym = CUR[cur].sym;
+    const conv = e => { const x = convert(e.amount, e.currency, cur); return Number.isFinite(x) ? x : 0; };
+    const total = list.reduce((s, e) => s + conv(e), 0), overall = all.reduce((s, e) => s + conv(e), 0);
+    const budget = convert(Number(currentTripData.budget || 0), 'TWD', cur) || 0;
+    setElText('total-spent-display', blocked ? '請設定匯率' : fmtMoney(total, cur));
+    setElText('remaining-budget-display', blocked ? '-' : fmtMoney(budget - overall, cur));
+    setElText('per-person-display', blocked ? '-' : fmtMoney(total / (Number(currentTripData.members) || 1), cur));
+    const modeLabel = m => m === 'payer_excluded' ? '代墊' : m === 'self' ? '自付' : '均分';
     const box = $('expense-list-container');
     if (box) {
-      box.innerHTML = list.length ? list.slice().reverse().map(it => `
+      box.innerHTML = list.length ? list.slice().reverse().map(it => {
+        const ec = curOf(it.currency), approx = (ec !== cur && !blocked) ? `<span class="text-[9px] text-slate-400 font-normal ml-1">≈ ${fmtMoney(conv(it), cur)}</span>` : '';
+        return `
         <div data-id="${esc(it.id)}" class="bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] cursor-pointer">
-          <div class="min-w-0"><span class="font-bold text-slate-800">${esc(it.title)}</span><p class="text-[9px] text-slate-400">${esc(it.date)} | 付款: ${esc(it.payer)} | 模式: ${it.splitMode === 'payer_excluded' ? '代墊' : '均分'}</p></div>
-          <div class="flex items-center gap-1.5"><span class="font-bold text-emerald-600">NT$ ${Number(it.amount).toLocaleString()}</span>
-          <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button></div></div>`).join('')
+          <div class="min-w-0"><span class="font-bold text-slate-800">${esc(it.title)}</span><p class="text-[9px] text-slate-400">${esc(it.date)} | 付款: ${esc(it.payer)} | 模式: ${modeLabel(it.splitMode)}</p></div>
+          <div class="flex items-center gap-1.5"><span class="font-bold text-emerald-600">${fmtMoney(Number(it.amount), ec)}${approx}</span>
+          <button data-act="del" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-xmark"></i></button></div></div>`; }).join('')
         : '<p class="text-[11px] text-slate-400 text-center py-3">無記帳紀錄</p>';
       box.onclick = e => {
         const row = e.target.closest('[data-id]'); if (!row) return;
@@ -2617,8 +2659,8 @@
         else editExpenseItem(row.dataset.id);
       };
     }
-    renderSettlementSummary(all);          // 結算永遠以「全部支出」計算，不受篩選影響
-    renderExpensePieChart(list, total);
+    renderSettlementSummary(all);
+    renderExpensePieChart(list.map(e => ({ ...e, amount: conv(e) })), total);
   };
 
   window.renderChecklist = function () {
@@ -2639,9 +2681,9 @@
 
   /* ============ 6. Excel：範本函式原本不存在；時間／類型解析 ============ */
   window.downloadExcelTemplate = function () {
-    const rows = [['天數', '時間', '景點名稱', '地址', '類型', '花費(TWD)', '備註'],
-      [1, '09:30', '關西國際機場', '關西國際機場', '交通', 1200, '搭乘特急'],
-      [1, '16:00', '清水寺', '京都市東山區清水1丁目', '景點', 400, '']];
+    const rows = [['天數', '時間', '景點名稱', '地址', '類型', '花費', '備註', '幣別(TWD/JPY，空白=TWD)'],
+      [1, '09:30', '關西國際機場', '關西國際機場', '交通', 1200, '搭乘特急', 'TWD'],
+      [1, '16:00', '清水寺', '京都市東山區清水1丁目', '景點', 400, '', 'JPY']];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '行程');
     XLSX.writeFile(wb, '旅書行程範本.xlsx');
@@ -2663,7 +2705,7 @@
           const ty = String(row[4] || '').trim();
           parsedExcelEvents.push({ id: 'xl_' + Date.now() + '_' + i, day: Number(row[0]) || 1, time: t, title: String(row[2]),
             address: String(row[3] || row[2]), type: TYPE_MAP[ty] || (Object.values(TYPE_MAP).includes(ty) ? ty : 'sightseeing'),
-            cost: Number(row[5]) || 0, notes: String(row[6] || '') });
+            cost: Number(row[5]) || 0, costCurrency: /JPY|日圓|日幣|日元|¥|円/i.test(String(row[7] || '')) ? 'JPY' : 'TWD', notes: String(row[6] || '') });
         }
         setElText('excel-preview-count', parsedExcelEvents.length);
         $('excel-preview-table').innerHTML = parsedExcelEvents.map(it => `<div>Day ${it.day} [${esc(it.time)}] ${esc(it.title)}</div>`).join('');
@@ -2974,7 +3016,7 @@
         <div class="grid grid-cols-2 gap-2">
           <div><label class="block font-bold text-slate-700 mb-1">實際付款人</label><input id="sync-itin-payer" type="text" placeholder="例: 小明" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
           <div><label class="block font-bold text-slate-700 mb-1">分帳模式</label>
-            <select id="sync-itin-mode" class="w-full border border-slate-200 rounded p-1.5 outline-none bg-slate-50"><option value="normal">均分模式</option><option value="payer_excluded">代墊模式(不含付款人)</option></select></div>
+            <select id="sync-itin-mode" class="w-full border border-slate-200 rounded p-1.5 outline-none bg-slate-50"><option value="normal">均分模式</option><option value="payer_excluded">代墊模式(不含付款人)</option><option value="self">自行付款(無需分攤)</option></select></div>
         </div>
         <div><label class="block font-bold text-slate-700 mb-1">參與分攤成員 (逗號分隔)</label><input id="sync-itin-parts" type="text" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
         <button type="button" id="sync-itin-confirm" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg shadow-sm">建立記帳並同步</button>
@@ -2990,23 +3032,24 @@
       <label class="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded p-1.5 cursor-pointer">
         <span class="flex items-center gap-1.5 min-w-0"><input type="checkbox" data-id="${esc(it.id)}" checked class="w-4 h-4 accent-emerald-600 flex-shrink-0">
           <span class="truncate">Day ${esc(it.day)} ${esc(it.time)} ${esc(it.title)}</span></span>
-        <span class="font-bold text-emerald-700 whitespace-nowrap">NT$ ${Number(it.cost).toLocaleString()}</span></label>`).join('');
+        <span class="font-bold text-emerald-700 whitespace-nowrap">${CUR[curOf(it.costCurrency)].sym}${Number(it.cost).toLocaleString()}</span></label>`).join('');
     if (!$('sync-itin-parts').value) $('sync-itin-parts').value = knownPeople();
     $('sync-itin-modal').classList.remove('hidden');
   };
   function confirmSyncItinerary() {
     const payer = $('sync-itin-payer').value.trim(), parts = $('sync-itin-parts').value.split(',').map(x => x.trim()).filter(Boolean);
     if (!payer) { showToast('請填寫實際付款人', 'error'); $('sync-itin-payer').focus(); return; }
-    if (!parts.length) { showToast('請填寫參與分攤成員', 'error'); $('sync-itin-parts').focus(); return; }
+    if (!parts.length && $('sync-itin-mode').value !== 'self') { showToast('請填寫參與分攤成員', 'error'); $('sync-itin-parts').focus(); return; }
     const ids = new Set([...$('sync-itin-list').querySelectorAll('input:checked')].map(i => i.dataset.id));
     if (!ids.size) { showToast('請至少勾選一筆行程', 'error'); return; }
     if (!Array.isArray(currentTripData.expenses)) currentTripData.expenses = [];
     const mode = $('sync-itin-mode').value; let n = 0;
+    if (!getRate() && (currentTripData.itinerary || []).some(it => ids.has(String(it.id)) && it.costCurrency === 'JPY')) { showToast('包含日圓花費，請先在花費頁設定匯率', 'error'); return; }
     (currentTripData.itinerary || []).forEach((it, idx) => {
       if (!ids.has(String(it.id)) || it.linkedExpenseId || !(Number(it.cost) > 0)) return;
       const exId = 'ex_' + Date.now() + '_' + idx;
-      currentTripData.expenses.push({ id: exId, title: it.title, amount: Number(it.cost), date: itemDate(it) || currentTripData.startDate,
-        payer, category: TYPE_TO_CAT[it.type] || 'other', splitMode: mode, participants: parts });
+      currentTripData.expenses.push({ id: exId, title: it.title, amount: Number(it.cost), currency: curOf(it.costCurrency), date: itemDate(it) || currentTripData.startDate,
+        payer, category: TYPE_TO_CAT[it.type] || 'other', splitMode: mode, participants: mode === 'self' ? [payer] : parts });
       it.linkedExpenseId = exId; it.expensePayer = payer; it.expenseSplitMode = mode; it.expenseParticipants = parts; delete it.syncDismissed;
       n++;
     });
@@ -3033,6 +3076,144 @@
     _applyExcel();
     if (withCost) showToast(`有 ${withCost} 筆行程含花費，可到「花費」頁按「同步到記帳」`, 'info');
   };
+
+  /* ============ 16. 幣別與匯率介面（台幣／日圓）、自行付款的表單行為 ============ */
+  // 匯率來源：ExchangeRate-API 開放端點（免金鑰、每日更新一次、允許快取、需標示來源）。每 24 小時最多查一次，結果存在本機
+  const RATE_TTL = 24 * 3600e3;
+  async function refreshRate(force) {
+    let cache = null; try { cache = JSON.parse(localStorage.getItem('fx_cache') || 'null'); } catch (e) {}
+    const age = cache ? Date.now() - cache.at : Infinity;
+    if (!force && age < RATE_TTL) return cache.rate;
+    if (force && age < 5 * 60e3) return cache.rate;                 // 手動更新也限制 5 分鐘一次，避免被限流
+    try {
+      const r = await fetch('https://open.er-api.com/v6/latest/JPY');
+      const j = await r.json(), v = j && j.result === 'success' && j.rates && Number(j.rates.TWD);
+      if (v > 0) { localStorage.setItem('fx_cache', JSON.stringify({ rate: v, at: Date.now() })); return v; }
+    } catch (e) {}
+    return cache ? cache.rate : null;
+  }
+  const tripUsesJpy = () => dispCur() === 'JPY' || (currentTripData.expenses || []).some(e => e.currency === 'JPY') || (currentTripData.itinerary || []).some(i => i.costCurrency === 'JPY');
+  async function autoRate(force, need) {
+    if (!force && currentTripData.jpyRateMode === 'manual') return;                    // 手動設定的匯率不被自動覆蓋
+    if (!force && !need && !tripUsesJpy()) return;
+    if (!force && getRate() && Date.now() - (currentTripData.jpyRateAt || 0) < RATE_TTL) return;
+    const trip = currentTripData, v = await refreshRate(force);
+    if (trip !== currentTripData) return;                                               // 等待期間已切換專案
+    if (!v) { if (force) showToast('無法取得匯率，請手動輸入', 'error'); return; }
+    trip.jpyRate = Number(v.toFixed(5)); trip.jpyRateAt = Date.now(); trip.jpyRateMode = 'auto';
+    saveTripToCloud();
+    ['expense', 'event'].forEach(k => { const a = $(k === 'expense' ? 'expense-amount' : 'event-cost'); if (a) updateHint(a.id, k + '-currency', k + '-conv-hint'); });   // 匯率到手後更新提示
+    if (force) showToast(`已更新匯率：1 日圓 = ${trip.jpyRate} 台幣`, 'success');
+  }
+
+  function ensureFxCard() {
+    let c = $('fx-card');
+    if (!c) {
+      const header = document.querySelector('#page-3 > div'); if (!header) return;
+      c = document.createElement('div'); c.id = 'fx-card';
+      c.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm space-y-2 text-[11px]';
+      c.innerHTML = `
+        <div class="flex items-center justify-between"><span class="font-bold text-slate-700">結算／統計幣別</span>
+          <div class="flex gap-1"><button type="button" data-cur="TWD" class="px-2 py-0.5 rounded font-bold"></button><button type="button" data-cur="JPY" class="px-2 py-0.5 rounded font-bold"></button></div></div>
+        <div class="flex items-center gap-1.5"><span class="text-slate-600 whitespace-nowrap">1 日圓 =</span>
+          <input id="fx-rate" type="number" step="any" min="0" class="w-20 border border-slate-200 rounded p-1 outline-none"><span class="text-slate-600">台幣</span>
+          <button type="button" id="fx-auto" class="ml-auto bg-slate-100 border border-slate-200 rounded px-2 py-1 font-bold text-slate-700">自動更新</button></div>
+        <p id="fx-status" class="text-[10px] text-slate-400"></p>`;
+      header.parentNode.insertBefore(c, header.nextSibling);
+      c.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { currentTripData.displayCurrency = b.dataset.cur; saveTripToCloud(); if (b.dataset.cur === 'JPY') autoRate(false, true); });
+      $('fx-rate').onchange = () => {
+        const v = Number($('fx-rate').value);
+        if (!(v > 0)) { showToast('匯率必須大於 0', 'error'); updateFxCard(); return; }
+        currentTripData.jpyRate = v; currentTripData.jpyRateAt = Date.now(); currentTripData.jpyRateMode = 'manual';
+        saveTripToCloud(); showToast('已手動設定匯率（不會被自動更新覆蓋）', 'success');
+      };
+      $('fx-auto').onclick = () => { currentTripData.jpyRateMode = 'auto'; autoRate(true); };
+    }
+    updateFxCard();
+  }
+  function updateFxCard() {
+    const c = $('fx-card'); if (!c) return;
+    const cur = dispCur();
+    c.querySelectorAll('[data-cur]').forEach(b => {
+      b.textContent = b.dataset.cur === 'TWD' ? '台幣 NT$' : '日圓 ¥';
+      b.className = 'px-2 py-0.5 rounded font-bold ' + (b.dataset.cur === cur ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600');
+    });
+    if (document.activeElement !== $('fx-rate')) $('fx-rate').value = getRate() || '';
+    const mode = currentTripData.jpyRateMode, at = currentTripData.jpyRateAt ? new Date(currentTripData.jpyRateAt).toLocaleString('zh-TW', { hour12: false }) : '';
+    $('fx-status').innerHTML = (!getRate() ? '尚未設定匯率：請輸入，或按「自動更新」。' : mode === 'manual' ? `手動設定（${esc(at)}）。` : `自動取得（${esc(at)}）。`) +
+      ' 自動匯率為市場參考價，與實際換匯／刷卡匯率可能不同，可直接手動輸入。 <a class="underline" href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a>';
+  }
+
+  // 金額下方的換算提示
+  let lastCur = 'TWD';
+  function updateHint(amtId, curId, hintId) {
+    const h = $(hintId), a = Number($(amtId).value), c = $(curId).value; if (!h) return;
+    if (!(a > 0)) { h.textContent = ''; return; }
+    const r = getRate();
+    if (!r) { h.textContent = c === 'JPY' ? '尚未設定匯率' : ''; return; }
+    h.textContent = c === 'JPY' ? `≈ ${fmtMoney(a * r, 'TWD')}（1 日圓 = ${r} 台幣）` : `≈ ${fmtMoney(a / r, 'JPY')}`;
+  }
+  [['expense-amount', 'expense-currency', 'expense-conv-hint'], ['event-cost', 'event-currency', 'event-conv-hint']].forEach(([a, c, h]) => {
+    $(a).addEventListener('input', () => updateHint(a, c, h));
+    $(c).addEventListener('change', () => { lastCur = $(c).value; if ($(c).value === 'JPY') autoRate(false, true); updateHint(a, c, h); });
+  });
+
+  // 「自行付款」：不需要分攤成員
+  const SELF_MAP = { 'expense-split-mode': ['expense-participants'], 'event-expense-split-mode': ['event-expense-participants'], 'sync-itin-mode': ['sync-itin-parts'] };
+  function applySelf(modeId) {
+    const inp = $(SELF_MAP[modeId][0]); if (!inp || !$(modeId)) return;
+    const self = $(modeId).value === 'self';
+    if (self && !inp.disabled) { inp.dataset.prev = inp.value; inp.value = ''; }
+    if (!self && inp.disabled) { inp.value = inp.dataset.prev || knownPeople(); }
+    inp.disabled = self; inp.classList.toggle('opacity-50', self);
+    inp.placeholder = self ? '自行付款，不需分攤' : '小華, 小美';
+  }
+  document.addEventListener('change', e => { if (e.target && SELF_MAP[e.target.id]) applySelf(e.target.id); });
+  const applyAllSelf = () => Object.keys(SELF_MAP).forEach(id => { if ($(id)) applySelf(id); });
+
+  // 開啟／編輯視窗時帶入幣別
+  const _oae = window.openAddExpenseModal;
+  window.openAddExpenseModal = function () { _oae(); $('expense-currency').value = lastCur; updateHint('expense-amount', 'expense-currency', 'expense-conv-hint'); applyAllSelf(); };
+  const _eei = window.editExpenseItem;
+  window.editExpenseItem = function (id) {
+    _eei(id);
+    const it = (currentTripData.expenses || []).find(e => e.id === id);
+    $('expense-currency').value = curOf(it && it.currency); updateHint('expense-amount', 'expense-currency', 'expense-conv-hint');
+    if (it && it.splitMode === 'self') { const p = $('expense-participants'); p.dataset.prev = knownPeople(); } applyAllSelf();
+  };
+  const _oaev = window.openAddEventModal;
+  window.openAddEventModal = function () { _oaev(); $('event-currency').value = lastCur; updateHint('event-cost', 'event-currency', 'event-conv-hint'); applyAllSelf(); };
+  const _eit = window.editItineraryItem;
+  window.editItineraryItem = function (id) {
+    _eit(id);
+    const it = (currentTripData.itinerary || []).find(x => x.id === id);
+    $('event-currency').value = curOf(it && it.costCurrency); updateHint('event-cost', 'event-currency', 'event-conv-hint'); applyAllSelf();
+  };
+  const _osim = window.openSyncItineraryModal;
+  window.openSyncItineraryModal = function () { _osim(); applyAllSelf(); };
+
+  // 送出前的檢查：自行付款不需分攤成員；日圓需要匯率
+  const needRateMsg = () => { showToast('請先設定日圓匯率（花費頁上方），或稍候自動取得後再送出', 'error'); autoRate(false, true); };
+  const _addExp3 = window.handleAddExpense;
+  window.handleAddExpense = function (e) {
+    e.preventDefault();
+    if ($('expense-split-mode').value === 'self') { $('expense-participants').disabled = false; $('expense-participants').value = $('expense-payer').value.trim(); }
+    if ($('expense-currency').value === 'JPY' && !getRate()) { needRateMsg(); return; }
+    _addExp3(e);
+  };
+  const _addEv3 = window.handleAddEvent;
+  window.handleAddEvent = function (e) {
+    e.preventDefault();
+    if ((Number($('event-cost').value) || 0) > 0 && $('event-link-expense').checked) {
+      if ($('event-expense-split-mode').value === 'self') { $('event-expense-participants').disabled = false; $('event-expense-participants').value = $('event-expense-payer').value.trim(); }
+      if ($('event-currency').value === 'JPY' && !getRate()) { needRateMsg(); return; }
+    }
+    _addEv3(e);
+  };
+
+  // 進入花費頁時（若需要）自動取得匯率
+  const _g16 = window.goToPage;
+  window.goToPage = function (p) { const r = _g16(p); if (p === 3) autoRate(false); return r; };
 })();
 </script>
 

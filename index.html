@@ -790,8 +790,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const sharedTripId = urlParams.get('trip');
             if (sharedTripId) {
-                await loadTripFromCloud(sharedTripId);
-                goToPage(1);
+                await openSharedTrip(sharedTripId);
             } else {
                 goHomeLanding();
             }
@@ -806,7 +805,8 @@
                     supabaseClient = window.supabase.createClient(url, key);
                     supabaseClient.auth.onAuthStateChange((event, session) => {
                         if (event === 'INITIAL_SESSION') return;
-                        if (applyAccountChange(session && session.user ? session.user : null)) goHomeLanding();
+                        const changed = applyAccountChange(session && session.user ? session.user : null);
+                        if (changed && !window.__explicitAuth) setTimeout(() => goHomeLanding(), 0);   // 其他分頁登入／登出才需要回首頁
                     });
                 } catch(e) {}
             }
@@ -1111,9 +1111,25 @@
             }
         };
 
+        // 分享連結（?trip=ID）一律要求登入；無權限或不存在時只回首頁並提示，不顯示任何專案內容
+        window.openSharedTrip = async function(id) {
+            try { history.replaceState(null, '', location.pathname); } catch (e) {}
+            if (!(supabaseClient && currentUser)) {
+                sessionStorage.setItem('pending_trip', id);
+                await goHomeLanding();
+                showToast('這是共編專案連結，請先登入被授權的帳號', 'error');
+                openModal('auth-modal');
+                return false;
+            }
+            sessionStorage.removeItem('pending_trip');
+            const ok = await loadTripFromCloud(id);
+            if (ok) goToPage(1); else await goHomeLanding();
+            return ok;
+        };
+
         window.openTripById = async function(id) {
-            await loadTripFromCloud(id);
-            goToPage(1);
+            const ok = await loadTripFromCloud(id);
+            if (ok) goToPage(1); else await goHomeLanding();
         };
 
         window.deleteTripProject = async function(event, id) {
@@ -2071,9 +2087,9 @@
         };
 
         window.switchTrip = async function(id) {
-            await loadTripFromCloud(id);
+            const ok = await loadTripFromCloud(id);
             closeModal('project-modal');
-            showToast('已切換專案', 'info');
+            if (ok) showToast('已切換專案', 'info');
         };
 
         window.switchAuthTab = function(tab) {
@@ -2115,8 +2131,13 @@
                 closeModal('auth-modal');
                 showToast('登入成功', 'success');
                 await fetchAllCloudTrips();
-                await loadTripFromCloud(currentTripId);
-                goHomeLanding();
+                const pending = sessionStorage.getItem('pending_trip');
+                if (pending) {
+                    await openSharedTrip(pending);
+                } else {
+                    await loadTripFromCloud(currentTripId);
+                    goHomeLanding();
+                }
             } catch(err) {
                 showToast('登入失敗: ' + err.message, 'error');
             }
@@ -2340,29 +2361,36 @@
   }
   async function doPush(id, trip) {
     if (!(supabaseClient && currentUser)) return false;
+    const uid = currentUser.id, ns = 'u_' + uid + ':';          // 之後即使登出或切換帳號，仍寫回這個帳號自己的空間
     try {
-      const owner = trip.ownerId || currentUser.id;
+      const owner = trip.ownerId || uid;
       trip.ownerId = owner;
       const now = new Date().toISOString();
-      if (owner === currentUser.id) {
+      if (owner === uid) {
         const { error } = await supabaseClient.from('trips').upsert({ id, user_id: owner, title: trip.title, data: trip, updated_at: now });
         if (error) throw error;
       } else {                                                    // 共編者：只能更新，不能新增或改擁有者
         const { data, error } = await supabaseClient.from('trips').update({ title: trip.title, data: trip, updated_at: now }).eq('id', id).select('id');
         if (error) throw error;
-        if (!data || !data.length) throw new Error('沒有寫入權限（可能已被移出共編名單）');
+        if (!data || !data.length) { const r = new Error('revoked'); r.revoked = true; throw r; }
       }
-      store.remove('unsynced_' + id);
+      localStorage.removeItem(ns + 'unsynced_' + id);
       return true;
     } catch (e) {
       console.error(e);
-      store.set('unsynced_' + id, '1');
+      if (e.revoked) {                                            // 已不在共編名單：不再重送，移除本機副本
+        localStorage.removeItem(ns + 'unsynced_' + id); localStorage.removeItem(ns + 'local_trip_' + id);
+        showToast('你已不在此專案的共編名單，無法儲存；專案已從本機移除', 'error');
+        return false;
+      }
+      localStorage.setItem(ns + 'unsynced_' + id, '1');
       showToast('雲端同步失敗，資料已存本機：' + (e.message || ''), 'error');
       return false;
     }
   }
 
   window.saveTripToCloud = async function () {
+    window.__tripDenied = false;
     (currentTripData.expenses || []).forEach(e => { if (CAT_FIX[e.category]) e.category = CAT_FIX[e.category]; });
     // 行程與花費的連動：以花費為準同步名稱／金額；花費已刪除則解除連動
     (currentTripData.itinerary || []).forEach(it => {
@@ -2426,7 +2454,8 @@
           if (data && data.data && canSeeRow(data)) {
             currentTripData = data.data; currentTripData.ownerId = data.user_id;
             store.set('local_trip_' + tId, JSON.stringify(currentTripData));
-            renderTripData(); return;
+            window.__tripDenied = false;
+            renderTripData(); return true;
           }
         }
       }
@@ -2434,12 +2463,17 @@
     // 雲端明確回覆「看不到這筆」時，不可退回使用本機舊快取（除非是尚未同步的自己的資料）
     const useLocal = local && (!answered || store.get('unsynced_' + tId));
     try { currentTripData = useLocal ? JSON.parse(local) : getInitialTripData(); } catch (e) { currentTripData = getInitialTripData(); }
+    let ok = true;
     if (!useLocal && tId !== 'default_trip') {
       currentTripId = 'default_trip'; store.remove('last_trip_id');
       currentTripData = getInitialTripData();
-      showToast('找不到此專案，可能尚未登入或沒有存取權限', 'error');
+      showToast('無法開啟：專案不存在，或你的帳號沒有被授權', 'error');
+      ok = false;
     }
+    if (!ok) window.__tripDenied = true;                          // 被拒絕：封鎖各專案分頁，避免誤看到範例資料
+    else if (tId !== 'default_trip') window.__tripDenied = false;
     renderTripData();
+    return ok;
   };
 
   // 登入時，若這台裝置有「未登入時」建立的專案，詢問是否匯入此帳號（每個帳號只問一次）
@@ -2686,9 +2720,18 @@
     ['home', 1, 2, 3, 4, 5].forEach(k => { const b = $('nav-btn-' + k); if (b) { b.classList.toggle('text-amber-600', k === active); b.classList.toggle('text-slate-400', k !== active); } });
   }
   const _goToPage = window.goToPage;
-  window.goToPage = function (p) { _goToPage(p); if (p >= 1 && p <= totalPages) markNav(p); };
+  window.goToPage = function (p) {
+    if (window.__tripDenied && p >= 1 && p <= totalPages) return goHomeLanding();   // 沒有權限的專案不顯示任何分頁
+    _goToPage(p); if (p >= 1 && p <= totalPages) markNav(p);
+  };
   const _goHome = window.goHomeLanding;
-  window.goHomeLanding = async function () { markNav('home'); return _goHome(); };
+  window.goHomeLanding = async function () {
+    markNav('home');
+    const r = await _goHome();
+    setElText('header-trip-title', '旅書 TravelBook');          // 首頁不顯示任何專案名稱／日期
+    setElText('header-trip-dates', '點擊返回首頁');
+    return r;
+  };
 
   const _renderDayTabs = window.renderDayTabs;
   window.renderDayTabs = function () {
@@ -2851,6 +2894,37 @@
     };
     holder.parentNode.appendChild(btn);
   })();
+
+  /* ============ 14. 第三輪除錯：登入旗標、圖片壓縮、Excel 重選同一檔案 ============ */
+  // 本分頁自己發起的登入／登出，由原流程負責切換畫面（避免與 onAuthStateChange 回呼互相覆蓋）
+  const _login2 = window.handleUserLogin;
+  window.handleUserLogin = async function (e) { window.__explicitAuth = true; try { return await _login2(e); } finally { window.__explicitAuth = false; } };
+  const _logout2 = window.handleUserLogout;
+  window.handleUserLogout = async function () { window.__explicitAuth = true; try { return await _logout2(); } finally { window.__explicitAuth = false; } };
+
+  // 上傳的圖片先縮小再存：原圖動輒數 MB，會塞滿 localStorage 並拖慢雲端同步
+  function resizeImageFile(file, maxW, quality, cb) {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, maxW / img.width), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); cb(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); cb(null); };
+    img.src = url;
+  }
+  const imgHandler = (targetId, maxW, okMsg) => function (e) {
+    const f = e.target.files[0]; if (!f) return;
+    resizeImageFile(f, maxW, 0.8, d => { if (!d) { showToast('無法讀取這張圖片', 'error'); return; } $(targetId).value = d; showToast(okMsg, 'success'); });
+  };
+  window.handleEditCoverUpload = imgHandler('input-trip-cover-base64', 1200, '圖片就緒');
+  window.handleNewCoverUpload = imgHandler('new-trip-cover-base64', 1200, '圖片就緒');
+  window.handleHomeBgUpload = imgHandler('input-home-bg-base64', 1600, '背景圖片就緒');
+
+  // 選同一個 Excel 檔案第二次時，瀏覽器不會觸發 change；讀取後清空即可重選
+  const _excelUp = window.handleExcelFileUpload;
+  window.handleExcelFileUpload = function (e) { const input = e.target; _excelUp(e); input.value = ''; };
 })();
 </script>
 

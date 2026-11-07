@@ -684,6 +684,7 @@
             
             <form id="auth-register-form" onsubmit="handleUserRegister(event)" class="space-y-2 hidden">
                 <div><label class="block font-bold text-slate-700 mb-1">Email</label><input type="email" id="reg-email" required class="w-full border rounded p-1.5 outline-none"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">暱稱／姓名 <span class="font-normal text-slate-400">(共編成員會看到這個名稱，不會顯示 Email)</span></label><input type="text" id="reg-nickname" required maxlength="20" class="w-full border rounded p-1.5 outline-none"></div>
                 <div><label class="block font-bold text-slate-700 mb-1">密碼</label><input type="password" id="reg-password" required minlength="6" class="w-full border rounded p-1.5 outline-none"></div>
                 <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2 rounded-lg">註冊新帳號</button>
             </form>
@@ -2120,8 +2121,10 @@
             if (!supabaseClient) { showToast('請先設定 Supabase URL 與 Key', 'error'); return; }
             const email = document.getElementById('reg-email').value;
             const password = document.getElementById('reg-password').value;
+            const nickname = document.getElementById('reg-nickname').value.trim();
+            if (!nickname) { showToast('請填寫暱稱或姓名', 'error'); return; }
             try {
-                const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { nickname } } });
                 if (error) throw error;
                 showToast(data && data.session ? '註冊成功！' : '註冊成功！若需信箱驗證，請先到信箱點擊驗證連結再登入', 'success');
                 switchAuthTab('login');
@@ -2299,20 +2302,79 @@
     return out;
   }
 
-  /* --- 付款確認的權限：「已付款」只有欠款人本人能勾，「已收款」只有收款人本人能勾，互不能代勾 --- */
+  /* --- 付款確認的權限：成員＝擁有者＋共編帳號。「已付款」只有欠款人的帳號能勾，「已收款」只有收款人的帳號能勾，互不能代勾 --- */
   const fmtTime = at => { if (!at) return ''; const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const myEmail = () => normEmail(currentUser && currentUser.email);
   const enforcePerm = () => !!currentUser && (currentTripData.collaborators || []).length > 0;       // 專案有共編者才需要身分管控
-  const isTripOwner = () => !!currentUser && (!currentTripData.ownerId || currentTripData.ownerId === currentUser.id);
-  const mappedEmail = name => normEmail((currentTripData.memberEmails || {})[name]);
-  const canConfirm = name => !enforcePerm() || (!!myEmail() && mappedEmail(name) === myEmail());
+  const isTripOwner = () => !!currentUser && (currentTripData.ownerId ? currentTripData.ownerId === currentUser.id : !enforcePerm());
+  // 成員顯示名稱＝各帳號自己設定的暱稱（存在 memberNames）。沒設定時用「成員＋四碼」代稱，絕不顯示 Email；同名時加註 (2)、(3)
+  const anonName = e => '成員' + (1000 + ([...e].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 9000));
+  function tripMembers() {
+    const emails = [...new Set([normEmail(currentTripData.ownerEmail), ...(currentTripData.collaborators || []).map(normEmail)].filter(Boolean))];
+    const nick = currentTripData.memberNames || {}, used = {};
+    return emails.map(e => {
+      const own = String(nick[e] || '').trim(), n = own || anonName(e), c = (used[n] = (used[n] || 0) + 1);
+      return { email: e, name: c > 1 ? `${n}(${c})` : n, hasNick: !!own };
+    });
+  }
+  const emailOfName = name => { const m = tripMembers().find(x => x.name === name); return m ? m.email : normEmail((currentTripData.memberEmails || {})[name]); };
+  const confBroken = () => enforcePerm() && !!window.__confErr;
+  const canConfirm = name => !enforcePerm() || (!confBroken() && !!myEmail() && emailOfName(name) === myEmail());
+  const skeyOf = (t, cur) => { const d = emailOfName(t.debtor), c = emailOfName(t.creditor); return d && c ? JSON.stringify([d, c, t.cents, cur]) : ''; };   // 資料庫用的鍵：以帳號（Email）表示
   const confOf = v => v === true ? { paid: { by: '', at: 0 }, received: { by: '', at: 0 } } : (v && typeof v === 'object' ? v : {});
-  const isSettled = v => { const c = confOf(v); return !!(c.paid && c.received); };
 
-  window.toggleSettlementConfirm = function (key, role, checked) {
-    let d, c; try { [d, c] = JSON.parse(key); } catch (e) { return; }
-    const name = role === 'paid' ? d : c;
-    if (!canConfirm(name)) { showToast(`只有「${name}」本人可以勾選「${role === 'paid' ? '已付款' : '已收款'}」`, 'error'); renderExpenses(); return; }
+  window.__confs = {}; window.__confErr = '';
+  const confKey = (sk, role) => currentTripId + '|' + sk + '|' + role;
+  function confState(t, cur, k) {
+    if (enforcePerm()) {                                              // 共編專案：以資料庫的確認紀錄為準
+      const sk = skeyOf(t, cur);
+      return sk ? { paid: window.__confs[confKey(sk, 'paid')] || null, received: window.__confs[confKey(sk, 'received')] || null } : { paid: null, received: null };
+    }
+    const c = confOf((currentTripData.settlementsPaid || {})[k]);       // 單人／本機：存在專案資料內
+    return { paid: c.paid || null, received: c.received || null };
+  }
+  const settledNow = (t, cur, k) => { const c = confState(t, cur, k); return !!(c.paid && c.received); };
+
+  let lastConfFetch = 0;
+  async function fetchConfirmations(force) {
+    if (!enforcePerm() || !supabaseClient) return;
+    if (!force && Date.now() - lastConfFetch < 3000) return;
+    lastConfFetch = Date.now();
+    const trip = currentTripId;
+    try {
+      const { data, error } = await supabaseClient.from('trip_confirmations').select('*').eq('trip_id', trip);
+      if (error) throw error;
+      if (trip !== currentTripId) return;
+      Object.keys(window.__confs).filter(k => k.startsWith(trip + '|')).forEach(k => delete window.__confs[k]);
+      (data || []).forEach(r => { window.__confs[trip + '|' + r.key + '|' + r.role] = { by: r.by_email, at: Date.parse(r.at) || 0 }; });
+      window.__confErr = '';
+    } catch (e) { window.__confErr = (e && e.message) || '讀取失敗'; }
+    const p3 = $('page-3'); if (p3 && !p3.classList.contains('hidden')) renderExpenses();
+  }
+  window.fetchConfirmations = fetchConfirmations;
+
+  window.toggleSettlementConfirm = async function (key, role, checked, el) {
+    const ds = (el && el.dataset) || {}; let d = ds.d, c = ds.c;
+    if (d === undefined) { try { [d, c] = JSON.parse(key); } catch (e) { return; } }
+    const name = role === 'paid' ? c : d, label = role === 'paid' ? '已付款' : '已收款';   // 已付款由「收款人」確認、已收款由「付款人」確認（互相確認）
+    if (!canConfirm(name)) { showToast(`「${label}」只能由${role === 'paid' ? '收款人' : '付款人'}「${name}」本人勾選`, 'error'); renderExpenses(); return; }
+    if (enforcePerm()) {
+      const sk = ds.skey;
+      if (!sk || !supabaseClient) { showToast('這筆款項的付款人或收款人沒有對應的帳號，無法確認', 'error'); renderExpenses(); return; }
+      try {
+        if (checked) {
+          const { error } = await supabaseClient.from('trip_confirmations').insert({ trip_id: currentTripId, key: sk, role, by_email: myEmail() });
+          if (error) throw error;
+        } else {
+          const { error } = await supabaseClient.from('trip_confirmations').delete().eq('trip_id', currentTripId).eq('key', sk).eq('role', role);
+          if (error) throw error;
+        }
+      } catch (e) {
+        const m = String((e && (e.message || e.code)) || '');
+        showToast(/trip_confirmations|42P01|schema cache/.test(m) ? '尚未建立 trip_confirmations 資料表，請先在 Supabase 執行建立資料表的 SQL' : /42501|row-level|policy/i.test(m) ? '資料庫拒絕：只有本人帳號可以勾選這個選項' : '確認失敗：' + m, 'error');
+      }
+      await fetchConfirmations(true); renderExpenses(); return;
+    }
     if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
     const rec = confOf(currentTripData.settlementsPaid[key]);
     const next = { paid: rec.paid || null, received: rec.received || null };
@@ -2320,12 +2382,32 @@
     if (!next.paid && !next.received) delete currentTripData.settlementsPaid[key]; else currentTripData.settlementsPaid[key] = next;
     saveTripToCloud();
   };
-  window.setMemberEmail = function (name, value) {
-    if (!isTripOwner()) { showToast('只有專案擁有者可以設定成員與帳號對應', 'error'); renderExpenses(); return; }
-    const v = normEmail(value);
-    if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { showToast('Email 格式不正確', 'error'); renderExpenses(); return; }
+
+  // 成員改名時，同步改掉既有帳目與行程裡的舊名稱
+  function renameMemberInData(oldName, newName) {
+    if (!oldName || oldName === newName) return;
+    (currentTripData.expenses || []).forEach(e => { if (e.payer === oldName) e.payer = newName; e.participants = (e.participants || []).map(p => p === oldName ? newName : p); });
+    (currentTripData.itinerary || []).forEach(i => { if (i.expensePayer === oldName) i.expensePayer = newName; if (i.expenseParticipants) i.expenseParticipants = i.expenseParticipants.map(p => p === oldName ? newName : p); });
+  }
+  // 登入者開啟共編專案時，把「自己帳號設定的暱稱」寫進專案成員名單（只寫自己的）
+  function syncMyNickname() {
+    if (!currentUser) return;
+    const nick = String((currentUser.user_metadata && currentUser.user_metadata.nickname) || '').trim(); if (!nick) return;
+    if (!(currentTripData.collaborators || []).length) return;
+    if (isTripOwner() && !currentTripData.ownerEmail) currentTripData.ownerEmail = myEmail();
+    const me = myEmail(), mine = tripMembers().find(m => m.email === me); if (!mine) return;          // 只有成員才會寫入
+    if (String((currentTripData.memberNames || {})[me] || '').trim() === nick) return;
+    if (!currentTripData.memberNames) currentTripData.memberNames = {};
+    currentTripData.memberNames[me] = nick;
+    renameMemberInData(mine.name, tripMembers().find(m => m.email === me).name);
+    saveTripToCloud();
+  }
+  window.syncMyNickname = syncMyNickname;
+  // 擁有者：把舊帳目裡的舊名稱對應到某位共編成員
+  window.setMemberEmail = function (name, email) {
+    if (!isTripOwner()) { showToast('只有專案擁有者可以設定對應', 'error'); renderExpenses(); return; }
     if (!currentTripData.memberEmails) currentTripData.memberEmails = {};
-    if (v) currentTripData.memberEmails[name] = v; else delete currentTripData.memberEmails[name];
+    if (email) currentTripData.memberEmails[name] = normEmail(email); else delete currentTripData.memberEmails[name];
     saveTripToCloud();
   };
 
@@ -2357,7 +2439,7 @@
     const S = n => (sum[n] = sum[n] || { pay: 0, recv: 0 });
     list.forEach(t => { S(t.debtor).pay += t.cents; S(t.creditor).recv += t.cents; });
     const totalAll = list.reduce((s, t) => s + t.cents, 0);
-    const unpaid = list.filter(t => !isSettled(paid[keyOf(t)])).reduce((s, t) => s + t.cents, 0);
+    const unpaid = list.filter(t => !settledNow(t, cur, keyOf(t))).reduce((s, t) => s + t.cents, 0);
     const netSum = Object.values(sum).reduce((s, v) => s + v.recv - v.pay, 0);
     const mixed = (expenses || []).some(e => curOf(e.currency) !== cur);
     const rateNote = mixed ? `<div class="text-[10px] text-slate-500">所有金額已統一換算為${CUR[cur].name}（1 日圓 = ${getRate()} 台幣）後計算。</div>` : '';
@@ -2369,23 +2451,23 @@
     Object.keys(byDebtor).sort().forEach(d => {
       html += `<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700 flex justify-between"><span>${esc(d)} 應付</span><span>${F(sum[d].pay)}</span></div>`;
       byDebtor[d].sort((a, b) => a.creditor.localeCompare(b.creditor)).forEach(t => {
-        const k = keyOf(t), c = confOf(paid[k]), both = !!(c.paid && c.received), g = t.g;
+        const k = keyOf(t), c = confState(t, cur, k), both = !!(c.paid && c.received), g = t.g;
         const line = (from, to) => g.items.filter(i => i.debtor === from && i.creditor === to)
           .map(i => `${esc(from)} 欠 ${esc(to)}：${esc(i.title)} ${F(i.cents)}${i.from !== cur ? `（原 ${fmtMoney(i.orig, i.from)}）` : ''}`).join('；');
         const fwd = line(t.debtor, t.creditor), back = line(t.creditor, t.debtor);
         const detail = [fwd, back].filter(Boolean).join('<br>') + (back ? '<br>→ 抵銷後如上' : '');
         const cb = (role, name, rec) => {
           const can = canConfirm(name), label = role === 'paid' ? '已付款' : '已收款';
-          return `<label class="flex items-center gap-1 ${can ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}" title="${can ? '' : esc('只有「' + name + '」本人可以勾選')}">
-            <input type="checkbox" data-key="${esc(k)}" data-role="${role}" ${rec ? 'checked' : ''} ${can ? '' : 'disabled'} class="w-4 h-4 accent-amber-600">
-            <span class="font-bold">${label}</span><span class="text-[9px] text-slate-400">（${esc(name)}勾${rec && rec.at ? '・' + fmtTime(rec.at) : ''}）</span></label>`;
+          return `<label class="flex items-center gap-1 ${can ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}" title="${can ? '' : esc('只有' + (role === 'paid' ? '收款人' : '付款人') + '「' + name + '」本人可以勾選')}">
+            <input type="checkbox" data-key="${esc(k)}" data-role="${role}" data-d="${esc(t.debtor)}" data-c="${esc(t.creditor)}" data-skey="${esc(skeyOf(t, cur))}" ${rec ? 'checked' : ''} ${can ? '' : 'disabled'} class="w-4 h-4 accent-amber-600">
+            <span class="font-bold">${label}</span><span class="text-[9px] text-slate-400">（由${role === 'paid' ? '收款人' : '付款人'} ${esc(name)} 確認${rec && rec.at ? '・' + fmtTime(rec.at) : ''}）</span></label>`;
         };
-        const status = both ? '<span class="text-emerald-600 font-bold">✓ 雙方已確認，已結清</span>'
-          : c.paid ? '<span class="text-amber-600">已付款，等待收款人確認</span>'
-          : c.received ? '<span class="text-amber-600">收款人已確認，等待付款人確認</span>' : '';
+        const status = both ? '<span class="text-emerald-600 font-bold">✓ 雙方已互相確認，已結清</span>'
+          : c.paid ? '<span class="text-amber-600">收款人已確認對方付款，等待付款人確認已收款</span>'
+          : c.received ? '<span class="text-amber-600">付款人已確認對方收款，等待收款人確認已付款</span>' : '';
         html += `<div class="px-2 py-1.5 border-t border-slate-100 ${both ? 'bg-emerald-50/70' : ''}">
           <div class="flex items-center justify-between"><span class="${both ? 'line-through text-slate-400' : 'font-bold text-slate-800'}">${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span><span class="font-bold text-emerald-700 whitespace-nowrap">${F(t.cents)}</span></div>
-          <div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[11px] text-slate-700">${cb('paid', t.debtor, c.paid)}${cb('received', t.creditor, c.received)}</div>
+          <div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[11px] text-slate-700">${cb('paid', t.creditor, c.paid)}${cb('received', t.debtor, c.received)}</div>
           <p class="text-[10px] mt-0.5">${status}</p>
           <p class="text-[9px] text-slate-400 leading-relaxed">${detail}</p></div>`;
       });
@@ -2401,22 +2483,28 @@
     return html;
   }
 
-  // 成員與帳號對應（只在專案有共編者時顯示；只有擁有者能修改）
+  // 共編成員面板：成員＝擁有者＋共編帳號，一律以暱稱顯示（不顯示 Email）
   function memberMapPanel(expenses) {
     if (!enforcePerm()) return '';
-    const names = [...new Set([...(expenses || []).flatMap(e => [e.payer, ...(e.participants || [])]).map(x => String(x || '').trim()).filter(Boolean), ...Object.keys(currentTripData.memberEmails || {})])].sort();
-    if (!names.length) return '';
-    const mine = names.filter(n => mappedEmail(n) === myEmail()), canEdit = isTripOwner();
-    const warn = mine.length ? `<p class="text-[10px] text-emerald-700">你目前的身分：${mine.map(esc).join('、')}（${esc(myEmail())}）</p>`
-      : `<p class="text-[10px] text-red-600">你的帳號（${esc(myEmail())}）尚未對應到任何成員，因此無法勾選付款／收款確認。${canEdit ? '請在下方把你自己的名稱對應到你的 Email。' : '請讓專案擁有者在下方設定。'}</p>`;
-    return `<details ${window.__mapOpen || !mine.length ? 'open' : ''} id="member-map" class="border border-slate-200 rounded-lg">
-      <summary class="px-2 py-1.5 font-bold text-slate-700 cursor-pointer">成員與帳號對應（付款確認權限）</summary>
+    const members = tripMembers(), canEdit = isTripOwner(), me = myEmail();
+    const mine = members.find(m => m.email === me);
+    const names = new Set(members.map(m => m.name));
+    const legacy = [...new Set((expenses || []).flatMap(e => [e.payer, ...(e.participants || [])]).map(x => String(x || '').trim()).filter(Boolean))].filter(n => !names.has(n)).sort();
+    const myNick = String((currentUser.user_metadata && currentUser.user_metadata.nickname) || '').trim();
+    const who = mine ? `<p class="text-[10px] text-emerald-700">你目前的身分：${esc(mine.name)}</p>`
+      : `<p class="text-[10px] text-red-600">你的帳號不在這個專案的成員名單內，無法勾選付款／收款確認。</p>`;
+    const nickWarn = !myNick ? '<p class="text-[10px] text-red-600">你還沒有設定暱稱：請點右上角帳號圖示設定「暱稱／姓名」，其他成員才認得出你。</p>' : '';
+    const err = window.__confErr ? `<p class="text-[10px] text-red-600">無法讀取付款確認紀錄：${esc(window.__confErr)}。請確認已在 Supabase 建立 trip_confirmations 資料表與權限。</p>` : '';
+    return `<details ${window.__mapOpen || !mine || err || !myNick || (legacy.length && canEdit) ? 'open' : ''} id="member-map" class="border border-slate-200 rounded-lg">
+      <summary class="px-2 py-1.5 font-bold text-slate-700 cursor-pointer">共編成員與付款確認權限</summary>
       <div class="p-2 space-y-1.5">
-        <p class="text-[10px] text-slate-500">「已付款」只有欠款人本人能勾，「已收款」只有收款人本人能勾，雙方不能代為勾選。請設定每位成員登入用的 Email。${canEdit ? '' : '（僅擁有者可修改）'}</p>
-        ${warn}
-        ${names.map(n => `<div class="flex items-center gap-1.5"><span class="w-16 truncate font-bold text-slate-700">${esc(n)}</span><input type="email" data-map-name="${esc(n)}" value="${esc((currentTripData.memberEmails || {})[n] || '')}" placeholder="登入 Email" ${canEdit ? '' : 'disabled'} class="min-w-0 flex-1 border border-slate-200 rounded p-1 outline-none ${canEdit ? '' : 'opacity-60'}"></div>`).join('')}
+        <p class="text-[10px] text-slate-500">成員＝專案擁有者＋共編名單的帳號，以各自設定的暱稱顯示。記帳時付款人與分攤成員請從這些成員中勾選。<b>互相確認：</b>「已付款」由<b>收款人</b>勾選（確認收到對方的款項），「已收款」由<b>付款人</b>勾選（確認對方已收到），任何人都不能代勾；驗證由資料庫端執行。</p>
+        ${who}${nickWarn}${err}
+        <div class="flex flex-wrap gap-1.5">${members.map(m => `<span class="px-2 py-0.5 rounded-full border ${m.email === me ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-slate-50 border-slate-200 text-slate-700'}">${esc(m.name)}${m.email === normEmail(currentTripData.ownerEmail) ? '（擁有者）' : ''}${m.hasNick ? '' : '（尚未設定暱稱）'}</span>`).join('')}</div>
+        ${legacy.length ? `<p class="text-[10px] text-amber-700 pt-1">以下是舊帳目裡尚未對應到成員的名稱，對應後才能做付款確認${canEdit ? '' : '（僅擁有者可設定）'}：</p>` + legacy.map(n => `<div class="flex items-center gap-1.5"><span class="w-20 truncate font-bold text-slate-700">${esc(n)}</span><select data-legacy="${esc(n)}" ${canEdit ? '' : 'disabled'} class="min-w-0 flex-1 border border-slate-200 rounded p-1 bg-white outline-none"><option value="">未對應</option>${members.map(m => `<option value="${esc(m.email)}" ${mappedLegacy(n) === m.email ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>`).join('') : ''}
       </div></details>`;
   }
+  const mappedLegacy = n => normEmail((currentTripData.memberEmails || {})[n]);
 
   window.renderSettlementSummary = function (expenses) {
     const box = $('settlement-container');
@@ -2437,12 +2525,12 @@
         html = '<div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。「自行付款」的支出不列入結算。</div>' + settlementBlock(expenses || [], dispCur(), null);
       }
     } catch (err) { console.error(err); box.innerHTML = '<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>'; return; }
-    box.innerHTML = html + memberMapPanel(expenses);
+    box.innerHTML = (confBroken() ? '<p class="text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1 text-[10px]">無法讀取付款確認紀錄，暫時不能勾選。請確認已建立 trip_confirmations 資料表。</p>' : '') + html + memberMapPanel(expenses);
     const det = box.querySelector('#member-map'); if (det) det.addEventListener('toggle', () => { window.__mapOpen = det.open; });
     box.onchange = e => {
       const t = e.target; if (!t || !t.dataset) return;
-      if (t.dataset.role) window.toggleSettlementConfirm(t.dataset.key, t.dataset.role, t.checked);
-      else if (t.dataset.mapName !== undefined) window.setMemberEmail(t.dataset.mapName, t.value);
+      if (t.dataset.role) window.toggleSettlementConfirm(t.dataset.key, t.dataset.role, t.checked, t);
+      else if (t.dataset.legacy !== undefined) window.setMemberEmail(t.dataset.legacy, t.value);
     };
   };
 
@@ -3267,8 +3355,8 @@
     inp.disabled = self; inp.classList.toggle('opacity-50', self);
     inp.placeholder = self ? '自行付款，不需分攤' : '小華, 小美';
   }
-  document.addEventListener('change', e => { if (e.target && SELF_MAP[e.target.id]) applySelf(e.target.id); });
-  const applyAllSelf = () => Object.keys(SELF_MAP).forEach(id => { if ($(id)) applySelf(id); });
+  document.addEventListener('change', e => { if (e.target && SELF_MAP[e.target.id]) { applySelf(e.target.id); refreshPickers(); } });
+  const applyAllSelf = () => { refreshPickers(); Object.keys(SELF_MAP).forEach(id => { if ($(id)) applySelf(id); }); refreshPickers(); };
 
   // 開啟／編輯視窗時帶入幣別
   const _oae = window.openAddExpenseModal;
@@ -3328,6 +3416,106 @@
   window.goHomeLanding = async function () { const r = await _goHome17(); applyHomeBg(); return r; };
   window.applyHomeBg = applyHomeBg;
   applyHomeBg();
+
+  /* ============ 18. 共編專案：付款人／分攤成員改為從共編帳號勾選（不再自由輸入文字） ============ */
+  const PICK_CFG = [
+    { payer: 'expense-payer', parts: 'expense-participants', mode: 'expense-split-mode' },
+    { payer: 'event-expense-payer', parts: 'event-expense-participants', mode: 'event-expense-split-mode' },
+    { payer: 'sync-itin-payer', parts: 'sync-itin-parts', mode: 'sync-itin-mode' }];
+  function refreshPickers() {
+    PICK_CFG.forEach(cfg => {
+      const pIn = $(cfg.payer), tIn = $(cfg.parts); if (!pIn || !tIn) return;
+      let sel = $(cfg.payer + '-pick'), box = $(cfg.parts + '-pick');
+      if (!enforcePerm()) { pIn.style.display = ''; tIn.style.display = ''; if (sel) sel.style.display = 'none'; if (box) box.style.display = 'none'; return; }
+      const members = tripMembers(), names = members.map(m => m.name);
+      pIn.style.display = 'none'; tIn.style.display = 'none';
+      if (!sel) { sel = document.createElement('select'); sel.id = cfg.payer + '-pick'; sel.className = 'w-full border border-slate-200 rounded p-1.5 bg-white outline-none'; pIn.parentNode.insertBefore(sel, pIn.nextSibling); sel.onchange = () => { pIn.value = sel.value; }; }
+      if (!box) { box = document.createElement('div'); box.id = cfg.parts + '-pick'; box.className = 'flex flex-wrap gap-x-3 gap-y-1 border border-slate-200 rounded p-1.5 bg-white'; tIn.parentNode.insertBefore(box, tIn.nextSibling); box.onchange = () => { tIn.value = [...box.querySelectorAll('input:checked')].map(i => i.value).join(', '); }; }
+      const payer = names.includes(pIn.value.trim()) ? pIn.value.trim() : '';
+      let parts = tIn.value.split(',').map(x => x.trim()).filter(x => names.includes(x));
+      const self = $(cfg.mode) && $(cfg.mode).value === 'self';
+      if (!parts.length && !self) parts = names.slice();                 // 新增時預設全員分攤
+      pIn.value = payer; if (!self) tIn.value = parts.join(', ');
+      sel.innerHTML = '<option value="">選擇付款人</option>' + members.map(m => `<option value="${esc(m.name)}" ${m.name === payer ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+      box.innerHTML = members.map(m => `<label class="flex items-center gap-1"><input type="checkbox" value="${esc(m.name)}" ${parts.includes(m.name) ? 'checked' : ''} class="w-4 h-4 accent-emerald-600"><span>${esc(m.name)}</span></label>`).join('');
+      sel.style.display = ''; box.style.display = self ? 'none' : '';
+    });
+  }
+  // 送出前檢查：共編專案的付款人與分攤成員必須是共編成員，否則該筆款項沒有對應帳號、無法做付款確認
+  function memberCheck(payer, partsStr, mode) {
+    if (!enforcePerm()) return '';
+    const names = new Set(tripMembers().map(m => m.name));
+    if (!names.has(payer)) return '共編專案的付款人必須從共編成員中選擇';
+    if (mode !== 'self') { const bad = String(partsStr || '').split(',').map(x => x.trim()).filter(Boolean).filter(p => !names.has(p)); if (bad.length) return '分攤成員必須是共編成員：' + bad.join('、'); }
+    return '';
+  }
+  const _addExp4 = window.handleAddExpense;
+  window.handleAddExpense = function (e) {
+    e.preventDefault();
+    const m = memberCheck($('expense-payer').value.trim(), $('expense-participants').value, $('expense-split-mode').value);
+    if (m) { showToast(m, 'error'); return; }
+    _addExp4(e);
+  };
+  const _addEv4 = window.handleAddEvent;
+  window.handleAddEvent = function (e) {
+    e.preventDefault();
+    if ((Number($('event-cost').value) || 0) > 0 && $('event-link-expense').checked) {
+      const m = memberCheck($('event-expense-payer').value.trim(), $('event-expense-participants').value, $('event-expense-split-mode').value);
+      if (m) { showToast(m, 'error'); return; }
+    }
+    _addEv4(e);
+  };
+  // 同步視窗的送出檢查：直接掛在確認按鈕前
+  document.addEventListener('click', e => {
+    if (e.target && e.target.id === 'sync-itin-confirm') {
+      const m = memberCheck($('sync-itin-payer').value.trim(), $('sync-itin-parts').value, $('sync-itin-mode').value);
+      if (m) { e.stopImmediatePropagation(); e.preventDefault(); showToast(m, 'error'); }
+    }
+  }, true);
+  // 進入花費頁時更新付款確認紀錄
+  const _g18 = window.goToPage;
+  window.goToPage = function (p) { const r = _g18(p); if (p === 3) fetchConfirmations(false); return r; };
+
+  /* ============ 19. 帳號暱稱：註冊時填寫，之後可在帳號視窗修改；共編專案只顯示暱稱，不顯示 Email ============ */
+  const myNickRaw = () => String((currentUser && currentUser.user_metadata && currentUser.user_metadata.nickname) || '').trim();
+  (function injectNickField() {
+    const panel = $('auth-logged-in-panel'); if (!panel || $('my-nick')) return;
+    const box = document.createElement('div'); box.className = 'space-y-1';
+    box.innerHTML = `<label class="block font-bold text-slate-700">我的暱稱／姓名 <span class="font-normal text-slate-400">(共編成員看到的名稱)</span></label>
+      <div class="flex gap-1"><input id="my-nick" type="text" maxlength="20" class="min-w-0 flex-1 border border-slate-200 rounded p-1.5 outline-none"><button id="my-nick-save" type="button" class="bg-amber-600 text-white font-semibold px-3 rounded">儲存</button></div>`;
+    panel.insertBefore(box, panel.lastElementChild);
+    $('my-nick-save').onclick = async () => {
+      const v = $('my-nick').value.trim();
+      if (!v) { showToast('請填寫暱稱或姓名', 'error'); return; }
+      if (!supabaseClient || !currentUser) return;
+      try {
+        const { error } = await supabaseClient.auth.updateUser({ data: { nickname: v } });
+        if (error) throw error;
+        currentUser.user_metadata = { ...(currentUser.user_metadata || {}), nickname: v };
+        showToast('暱稱已更新', 'success');
+        syncMyNickname(); renderTripData();
+      } catch (e) { showToast('更新暱稱失敗：' + (e.message || ''), 'error'); }
+    };
+  })();
+  const _openModal19 = window.openModal;
+  window.openModal = function (id) { _openModal19(id); if (id === 'auth-modal' && $('my-nick')) $('my-nick').value = myNickRaw(); };
+
+  // 封面的「共編授權名單」不顯示 Email：有暱稱顯示暱稱，否則只顯示人數
+  function updateCoverCollab() {
+    const el = $('cover-collaborators'); if (!el) return;
+    const n = (currentTripData.collaborators || []).length; if (!n) return;
+    const named = (currentUser && enforcePerm()) ? tripMembers().filter(m => m.hasNick && m.email !== normEmail(currentTripData.ownerEmail)).map(m => m.name) : [];
+    el.textContent = named.length ? `${n} 位共編成員：${named.join('、')}${named.length < n ? ' 等' : ''}` : `${n} 位共編成員`;
+  }
+  const _rtd19 = window.renderTripData;
+  window.renderTripData = function () { _rtd19(); updateCoverCollab(); syncMyNickname(); };
+
+  // 登入後若還沒設定暱稱，提醒並開啟帳號視窗
+  const _login19 = window.handleUserLogin;
+  window.handleUserLogin = async function (e) {
+    await _login19(e);
+    if (currentUser && !myNickRaw()) { showToast('請先設定暱稱／姓名，共編成員才認得出你', 'error'); openModal('auth-modal'); }
+  };
 })();
 </script>
 

@@ -316,7 +316,7 @@
                 <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     <h4 class="text-xs font-bold text-slate-700 flex items-center justify-between">
                         <span class="flex items-center gap-1"><i class="fa-solid fa-scale-balanced text-amber-600"></i> 智慧結算建議與還款確認</span>
-                        <span class="text-[9px] text-slate-400 font-normal">勾選代表已結清轉帳</span>
+                        <span class="text-[9px] text-slate-400 font-normal">付款人勾「已付款」、收款人勾「已收款」</span>
                     </h4>
                     <div id="settlement-container" class="space-y-1.5 text-[11px]"></div>
                 </div>
@@ -977,8 +977,7 @@
             const catList = document.getElementById('page-category-list');
             if (home) {
                 home.classList.remove('hidden');
-                const savedBg = store.get('home_custom_bg') || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80';
-                home.style.backgroundImage = `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)), url('${savedBg}')`;
+                if (window.applyHomeBg) window.applyHomeBg();     // 自訂背景不加黑色覆蓋層（見修補包第 17 節）
             }
             if (catList) catList.classList.add('hidden');
             for (let i = 1; i <= totalPages; i++) {
@@ -2236,7 +2235,8 @@
     </script>
 
     <!-- ===== 修補包（結算完整債務關係與 bug 修正）===== -->
-<style>input,textarea,select{user-select:text;-webkit-user-select:text}</style>
+<style>input,textarea,select{user-select:text;-webkit-user-select:text}
+#page-home.home-custom h2,#page-home.home-custom .text-center p,#page-home.home-custom .pt-4 button{text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 2px rgba(0,0,0,.55)}</style>
 <script>
 (function () {
   'use strict';
@@ -2252,6 +2252,7 @@
   const CUR = { TWD: { sym: 'NT$ ', scale: 100, name: '台幣' }, JPY: { sym: '¥', scale: 1, name: '日圓' } };
   const curOf = c => (c === 'JPY' ? 'JPY' : 'TWD');
   const getRate = () => { const r = Number(currentTripData.jpyRate); return r > 0 ? r : 0; };
+  const isSplit = () => currentTripData.displayCurrency === 'SPLIT';          // 結算幣別選「分開計算」：台幣、日圓各自結算，不換算
   const dispCur = () => curOf(currentTripData.displayCurrency);
   function convert(amount, from, to) {
     amount = Number(amount) || 0; from = curOf(from); to = curOf(to);
@@ -2259,17 +2260,20 @@
     const r = getRate(); if (!r) return NaN;
     return from === 'JPY' ? amount * r : amount / r;
   }
-  const needRate = expenses => !getRate() && (expenses || []).some(e => curOf(e.currency) !== dispCur());
+  const needRate = expenses => !isSplit() && !getRate() && (expenses || []).some(e => curOf(e.currency) !== dispCur());
   const fmtNum = (n, cur) => curOf(cur) === 'JPY' ? Math.round(n).toLocaleString('zh-TW') : n.toLocaleString('zh-TW', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
   const fmtMoney = (n, cur) => CUR[curOf(cur)].sym + fmtNum(n, cur);
   window.fxSummaryTotal = () => {
     const all = currentTripData.expenses || [], cur = dispCur();
+    if (isSplit()) {
+      const parts = ['TWD', 'JPY'].map(c => [c, all.filter(e => curOf(e.currency) === c).reduce((x, e) => x + Number(e.amount || 0), 0)]).filter(([, n]) => n > 0).map(([c, n]) => fmtMoney(n, c));
+      return parts.length ? parts.join(' ＋ ') : fmtMoney(0, 'TWD');
+    }
     if (needRate(all)) return '尚未設定匯率';
     return fmtMoney(all.reduce((s, e) => s + (convert(e.amount, e.currency, cur) || 0), 0), cur);
   };
 
-  /* ============ 1. 智慧結算：兩人之間可抵銷，不跨人轉嫁；所有金額先統一換算成「結算幣別」再計算 ============ */
-  // cur：結算幣別。每筆支出先換算成結算幣別（台幣取到分、日圓取整數），再依分攤方式拆帳
+  /* ============ 1. 智慧結算：兩人之間可抵銷，不跨人轉嫁；可「統一換算」或「不同幣別分開計算」；付款／收款需本人確認 ============ */
   function expenseDebts(expenses, cur) {
     const scale = CUR[cur].scale, out = [];
     (expenses || []).forEach(ex => {
@@ -2295,17 +2299,41 @@
     return out;
   }
 
-  window.renderSettlementSummary = function (expenses) {
-    const box = $('settlement-container');
-    if (!box) return;
-    const oldBar = $('settle-mode-toggle'); if (oldBar) oldBar.remove();
-    const cur = dispCur(), scale = CUR[cur].scale, F = u => fmtMoney(u / scale, cur);
+  /* --- 付款確認的權限：「已付款」只有欠款人本人能勾，「已收款」只有收款人本人能勾，互不能代勾 --- */
+  const fmtTime = at => { if (!at) return ''; const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const myEmail = () => normEmail(currentUser && currentUser.email);
+  const enforcePerm = () => !!currentUser && (currentTripData.collaborators || []).length > 0;       // 專案有共編者才需要身分管控
+  const isTripOwner = () => !!currentUser && (!currentTripData.ownerId || currentTripData.ownerId === currentUser.id);
+  const mappedEmail = name => normEmail((currentTripData.memberEmails || {})[name]);
+  const canConfirm = name => !enforcePerm() || (!!myEmail() && mappedEmail(name) === myEmail());
+  const confOf = v => v === true ? { paid: { by: '', at: 0 }, received: { by: '', at: 0 } } : (v && typeof v === 'object' ? v : {});
+  const isSettled = v => { const c = confOf(v); return !!(c.paid && c.received); };
 
-    if (needRate(expenses)) { box.innerHTML = '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-center py-2 px-2">有不同幣別的支出，請先在上方設定匯率才能統一換算結算。</p>'; return; }
-    let debts;
-    try { debts = expenseDebts(expenses || [], cur); }
-    catch (err) { console.error(err); box.innerHTML = '<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>'; return; }
+  window.toggleSettlementConfirm = function (key, role, checked) {
+    let d, c; try { [d, c] = JSON.parse(key); } catch (e) { return; }
+    const name = role === 'paid' ? d : c;
+    if (!canConfirm(name)) { showToast(`只有「${name}」本人可以勾選「${role === 'paid' ? '已付款' : '已收款'}」`, 'error'); renderExpenses(); return; }
+    if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
+    const rec = confOf(currentTripData.settlementsPaid[key]);
+    const next = { paid: rec.paid || null, received: rec.received || null };
+    next[role] = checked ? { by: myEmail(), at: Date.now() } : null;
+    if (!next.paid && !next.received) delete currentTripData.settlementsPaid[key]; else currentTripData.settlementsPaid[key] = next;
+    saveTripToCloud();
+  };
+  window.setMemberEmail = function (name, value) {
+    if (!isTripOwner()) { showToast('只有專案擁有者可以設定成員與帳號對應', 'error'); renderExpenses(); return; }
+    const v = normEmail(value);
+    if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { showToast('Email 格式不正確', 'error'); renderExpenses(); return; }
+    if (!currentTripData.memberEmails) currentTripData.memberEmails = {};
+    if (v) currentTripData.memberEmails[name] = v; else delete currentTripData.memberEmails[name];
+    saveTripToCloud();
+  };
 
+  // 一個幣別的結算區塊（expenses 已先依需要篩選；cur 為結算幣別）
+  function settlementBlock(expenses, cur, heading) {
+    const scale = CUR[cur].scale, F = u => fmtMoney(u / scale, cur);
+    const head = heading ? `<div class="font-bold text-slate-700 border-b border-slate-200 pb-1 pt-1">${esc(heading)}</div>` : '';
+    const debts = expenseDebts(expenses, cur);
     const pairMap = {};
     debts.forEach(t => {
       const [x, y] = [t.debtor, t.creditor].sort();
@@ -2319,37 +2347,47 @@
       const xOwes = g.xy > g.yx;
       list.push({ debtor: xOwes ? g.x : g.y, creditor: xOwes ? g.y : g.x, cents: Math.abs(g.xy - g.yx), g });
     });
-    if (!list.length) { box.innerHTML = '<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>'; return; }
+    if (!list.length) return head + '<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>';
 
     if (!currentTripData.settlementsPaid) currentTripData.settlementsPaid = {};
     const paid = currentTripData.settlementsPaid;
-    const keyOf = t => JSON.stringify([t.debtor, t.creditor, t.cents, cur]);       // 金額與幣別任一改變，已還款勾選就失效，避免誤判
+    const keyOf = t => JSON.stringify([t.debtor, t.creditor, t.cents, cur]);       // 金額或幣別改變，確認紀錄就失效，避免誤判
 
     const sum = {};
     const S = n => (sum[n] = sum[n] || { pay: 0, recv: 0 });
     list.forEach(t => { S(t.debtor).pay += t.cents; S(t.creditor).recv += t.cents; });
     const totalAll = list.reduce((s, t) => s + t.cents, 0);
-    const unpaid = list.filter(t => !paid[keyOf(t)]).reduce((s, t) => s + t.cents, 0);
+    const unpaid = list.filter(t => !isSettled(paid[keyOf(t)])).reduce((s, t) => s + t.cents, 0);
     const netSum = Object.values(sum).reduce((s, v) => s + v.recv - v.pay, 0);
     const mixed = (expenses || []).some(e => curOf(e.currency) !== cur);
     const rateNote = mixed ? `<div class="text-[10px] text-slate-500">所有金額已統一換算為${CUR[cur].name}（1 日圓 = ${getRate()} 台幣）後計算。</div>` : '';
 
-    let html = `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] flex justify-between"><span>尚未結清（${CUR[cur].name}）</span><span class="font-bold text-amber-700">${F(unpaid)} / ${F(totalAll)}</span></div>
-      <div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。「自行付款」的支出不列入結算。</div>${rateNote}`;
+    let html = head + `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] flex justify-between"><span>尚未雙方確認結清（${CUR[cur].name}）</span><span class="font-bold text-amber-700">${F(unpaid)} / ${F(totalAll)}</span></div>${rateNote}`;
 
     const byDebtor = {};
     list.forEach(t => (byDebtor[t.debtor] = byDebtor[t.debtor] || []).push(t));
     Object.keys(byDebtor).sort().forEach(d => {
       html += `<div class="border border-slate-200 rounded-lg overflow-hidden"><div class="bg-slate-100 px-2 py-1 font-bold text-slate-700 flex justify-between"><span>${esc(d)} 應付</span><span>${F(sum[d].pay)}</span></div>`;
       byDebtor[d].sort((a, b) => a.creditor.localeCompare(b.creditor)).forEach(t => {
-        const k = keyOf(t), done = !!paid[k], g = t.g;
+        const k = keyOf(t), c = confOf(paid[k]), both = !!(c.paid && c.received), g = t.g;
         const line = (from, to) => g.items.filter(i => i.debtor === from && i.creditor === to)
           .map(i => `${esc(from)} 欠 ${esc(to)}：${esc(i.title)} ${F(i.cents)}${i.from !== cur ? `（原 ${fmtMoney(i.orig, i.from)}）` : ''}`).join('；');
         const fwd = line(t.debtor, t.creditor), back = line(t.creditor, t.debtor);
         const detail = [fwd, back].filter(Boolean).join('<br>') + (back ? '<br>→ 抵銷後如上' : '');
-        html += `<div class="px-2 py-1.5 border-t border-slate-100 ${done ? 'bg-emerald-50/70 text-slate-400 line-through' : 'text-slate-800'}">
-          <div class="flex items-center justify-between"><label class="flex items-center gap-2 min-w-0 cursor-pointer"><input type="checkbox" data-key="${esc(k)}" ${done ? 'checked' : ''} class="w-4 h-4 accent-amber-600 flex-shrink-0"><span>${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span></label><span class="font-bold text-emerald-700 whitespace-nowrap">${F(t.cents)}</span></div>
-          <p class="text-[9px] text-slate-400 ml-6 leading-relaxed">${detail}</p></div>`;
+        const cb = (role, name, rec) => {
+          const can = canConfirm(name), label = role === 'paid' ? '已付款' : '已收款';
+          return `<label class="flex items-center gap-1 ${can ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}" title="${can ? '' : esc('只有「' + name + '」本人可以勾選')}">
+            <input type="checkbox" data-key="${esc(k)}" data-role="${role}" ${rec ? 'checked' : ''} ${can ? '' : 'disabled'} class="w-4 h-4 accent-amber-600">
+            <span class="font-bold">${label}</span><span class="text-[9px] text-slate-400">（${esc(name)}勾${rec && rec.at ? '・' + fmtTime(rec.at) : ''}）</span></label>`;
+        };
+        const status = both ? '<span class="text-emerald-600 font-bold">✓ 雙方已確認，已結清</span>'
+          : c.paid ? '<span class="text-amber-600">已付款，等待收款人確認</span>'
+          : c.received ? '<span class="text-amber-600">收款人已確認，等待付款人確認</span>' : '';
+        html += `<div class="px-2 py-1.5 border-t border-slate-100 ${both ? 'bg-emerald-50/70' : ''}">
+          <div class="flex items-center justify-between"><span class="${both ? 'line-through text-slate-400' : 'font-bold text-slate-800'}">${esc(t.debtor)} 需支付給 ${esc(t.creditor)}</span><span class="font-bold text-emerald-700 whitespace-nowrap">${F(t.cents)}</span></div>
+          <div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-[11px] text-slate-700">${cb('paid', t.debtor, c.paid)}${cb('received', t.creditor, c.received)}</div>
+          <p class="text-[10px] mt-0.5">${status}</p>
+          <p class="text-[9px] text-slate-400 leading-relaxed">${detail}</p></div>`;
       });
       html += '</div>';
     });
@@ -2360,9 +2398,52 @@
       html += `<div class="px-2 py-1 border-t border-slate-100 flex justify-between"><span class="font-bold">${esc(n)}</span><span class="text-[10px] text-slate-500">應付 ${F(v.pay)}｜應收 ${F(v.recv)}</span><span class="font-bold ${net > 0 ? 'text-emerald-600' : net < 0 ? 'text-red-500' : 'text-slate-400'}">${net > 0 ? '+' : ''}${F(net)}</span></div>`;
     });
     html += `<div class="px-2 py-1 border-t border-slate-200 text-[10px] ${netSum === 0 ? 'text-emerald-600' : 'text-red-500'}">全體淨額加總：${F(netSum)} ${netSum === 0 ? '✓ 收支平衡' : '✗ 不平衡'}</div></div>`;
+    return html;
+  }
 
-    box.innerHTML = html;
-    box.onchange = e => { const k = e.target.dataset && e.target.dataset.key; if (k !== undefined) window.toggleSettlementPaid(k, e.target.checked); };
+  // 成員與帳號對應（只在專案有共編者時顯示；只有擁有者能修改）
+  function memberMapPanel(expenses) {
+    if (!enforcePerm()) return '';
+    const names = [...new Set([...(expenses || []).flatMap(e => [e.payer, ...(e.participants || [])]).map(x => String(x || '').trim()).filter(Boolean), ...Object.keys(currentTripData.memberEmails || {})])].sort();
+    if (!names.length) return '';
+    const mine = names.filter(n => mappedEmail(n) === myEmail()), canEdit = isTripOwner();
+    const warn = mine.length ? `<p class="text-[10px] text-emerald-700">你目前的身分：${mine.map(esc).join('、')}（${esc(myEmail())}）</p>`
+      : `<p class="text-[10px] text-red-600">你的帳號（${esc(myEmail())}）尚未對應到任何成員，因此無法勾選付款／收款確認。${canEdit ? '請在下方把你自己的名稱對應到你的 Email。' : '請讓專案擁有者在下方設定。'}</p>`;
+    return `<details ${window.__mapOpen || !mine.length ? 'open' : ''} id="member-map" class="border border-slate-200 rounded-lg">
+      <summary class="px-2 py-1.5 font-bold text-slate-700 cursor-pointer">成員與帳號對應（付款確認權限）</summary>
+      <div class="p-2 space-y-1.5">
+        <p class="text-[10px] text-slate-500">「已付款」只有欠款人本人能勾，「已收款」只有收款人本人能勾，雙方不能代為勾選。請設定每位成員登入用的 Email。${canEdit ? '' : '（僅擁有者可修改）'}</p>
+        ${warn}
+        ${names.map(n => `<div class="flex items-center gap-1.5"><span class="w-16 truncate font-bold text-slate-700">${esc(n)}</span><input type="email" data-map-name="${esc(n)}" value="${esc((currentTripData.memberEmails || {})[n] || '')}" placeholder="登入 Email" ${canEdit ? '' : 'disabled'} class="min-w-0 flex-1 border border-slate-200 rounded p-1 outline-none ${canEdit ? '' : 'opacity-60'}"></div>`).join('')}
+      </div></details>`;
+  }
+
+  window.renderSettlementSummary = function (expenses) {
+    const box = $('settlement-container');
+    if (!box) return;
+    const oldBar = $('settle-mode-toggle'); if (oldBar) oldBar.remove();
+    let html = '';
+    try {
+      if (isSplit()) {
+        ['TWD', 'JPY'].forEach(c => {
+          const sub = (expenses || []).filter(e => curOf(e.currency) === c);
+          if (sub.length) html += `<div class="space-y-1.5">${settlementBlock(sub, c, `${CUR[c].name}結算（不換算）`)}</div>`;
+        });
+        if (!html) html = '<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>';
+        html = '<div class="text-[10px] text-slate-500">不同幣別分開計算：台幣與日圓各自結算，互不換算。「自行付款」的支出不列入結算。</div>' + html;
+      } else if (needRate(expenses)) {
+        box.innerHTML = '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-center py-2 px-2">有不同幣別的支出，請先在上方設定匯率才能統一換算結算（或改選「分開計算」）。</p>'; return;
+      } else {
+        html = '<div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。「自行付款」的支出不列入結算。</div>' + settlementBlock(expenses || [], dispCur(), null);
+      }
+    } catch (err) { console.error(err); box.innerHTML = '<p class="text-red-600 text-center py-2">結算資料異常，請檢查各筆支出及分攤人設定。</p>'; return; }
+    box.innerHTML = html + memberMapPanel(expenses);
+    const det = box.querySelector('#member-map'); if (det) det.addEventListener('toggle', () => { window.__mapOpen = det.open; });
+    box.onchange = e => {
+      const t = e.target; if (!t || !t.dataset) return;
+      if (t.dataset.role) window.toggleSettlementConfirm(t.dataset.key, t.dataset.role, t.checked);
+      else if (t.dataset.mapName !== undefined) window.setMemberEmail(t.dataset.mapName, t.value);
+    };
   };
 
   /* ============ 2. 無法開啟的「新增花費」視窗、openModal 遞迴 ============ */
@@ -2634,19 +2715,29 @@
     const v = id => ($(id) ? $(id).value : 'ALL');
     const d = v('expense-filter-date'), c = v('expense-filter-category'), p = v('expense-filter-payer');
     const list = all.filter(e => (d === 'ALL' || e.date === d) && (c === 'ALL' || e.category === c) && (p === 'ALL' || e.payer === p));
-    const cur = dispCur(), blocked = needRate(all);
+    const split = isSplit(), cur = dispCur(), blocked = needRate(all);
     window.__dispSym = CUR[cur].sym;
     const conv = e => { const x = convert(e.amount, e.currency, cur); return Number.isFinite(x) ? x : 0; };
-    const total = list.reduce((s, e) => s + conv(e), 0), overall = all.reduce((s, e) => s + conv(e), 0);
-    const budget = convert(Number(currentTripData.budget || 0), 'TWD', cur) || 0;
-    setElText('total-spent-display', blocked ? '請設定匯率' : fmtMoney(total, cur));
-    setElText('remaining-budget-display', blocked ? '-' : fmtMoney(budget - overall, cur));
-    setElText('per-person-display', blocked ? '-' : fmtMoney(total / (Number(currentTripData.members) || 1), cur));
+    const members = Number(currentTripData.members) || 1;
+    const sumBy = (arr, c2) => arr.filter(e => curOf(e.currency) === c2).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const splitText = (arr, div) => { const parts = ['TWD', 'JPY'].map(c2 => [c2, sumBy(arr, c2) / div]).filter(([, n]) => n > 0).map(([c2, n]) => fmtMoney(n, c2)); return parts.length ? parts.join(' ＋ ') : fmtMoney(0, 'TWD'); };
+    if (split) {                                                  // 分開計算：台幣與日圓各自加總，不換算
+      setElText('total-spent-display', splitText(list, 1));
+      const rem = $('remaining-budget-display');
+      if (rem) rem.innerHTML = `${esc(fmtMoney(Number(currentTripData.budget || 0) - sumBy(all, 'TWD'), 'TWD'))}<span class="block text-[9px] text-slate-400 font-normal">不含日圓支出</span>`;
+      setElText('per-person-display', splitText(list, members));
+    } else {
+      const total = list.reduce((s, e) => s + conv(e), 0), overall = all.reduce((s, e) => s + conv(e), 0);
+      const budget = convert(Number(currentTripData.budget || 0), 'TWD', cur) || 0;
+      setElText('total-spent-display', blocked ? '請設定匯率' : fmtMoney(total, cur));
+      setElText('remaining-budget-display', blocked ? '-' : fmtMoney(budget - overall, cur));
+      setElText('per-person-display', blocked ? '-' : fmtMoney(total / members, cur));
+    }
     const modeLabel = m => m === 'payer_excluded' ? '代墊' : m === 'self' ? '自付' : '均分';
     const box = $('expense-list-container');
     if (box) {
       box.innerHTML = list.length ? list.slice().reverse().map(it => {
-        const ec = curOf(it.currency), approx = (ec !== cur && !blocked) ? `<span class="text-[9px] text-slate-400 font-normal ml-1">≈ ${fmtMoney(conv(it), cur)}</span>` : '';
+        const ec = curOf(it.currency), approx = (!split && ec !== cur && !blocked) ? `<span class="text-[9px] text-slate-400 font-normal ml-1">≈ ${fmtMoney(conv(it), cur)}</span>` : '';
         return `
         <div data-id="${esc(it.id)}" class="bg-slate-50 p-2 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] cursor-pointer">
           <div class="min-w-0"><span class="font-bold text-slate-800">${esc(it.title)}</span><p class="text-[9px] text-slate-400">${esc(it.date)} | 付款: ${esc(it.payer)} | 模式: ${modeLabel(it.splitMode)}</p></div>
@@ -2660,7 +2751,15 @@
       };
     }
     renderSettlementSummary(all);
-    renderExpensePieChart(list.map(e => ({ ...e, amount: conv(e) })), total);
+    // 圓餅圖需要共同單位才能比較比例：分開計算時以台幣呈現（日圓依匯率換算，僅供參考）
+    const chartCur = split ? 'TWD' : cur;
+    window.__dispSym = CUR[chartCur].sym;
+    const cconv = e => { const x = convert(e.amount, e.currency, chartCur); return Number.isFinite(x) ? x : 0; };
+    renderExpensePieChart(list.map(e => ({ ...e, amount: cconv(e) })), list.reduce((s, e) => s + cconv(e), 0));
+    if (split) {
+      const bc = $('expense-bar-chart');
+      if (bc) bc.insertAdjacentHTML('afterbegin', `<p class="text-[10px] text-slate-400">${getRate() || !list.some(e => e.currency === 'JPY') ? '圖表為比較比例，日圓依匯率換算為台幣（僅供參考）。' : '尚未設定匯率，圖表僅含台幣支出。'}</p>`);
+    }
   };
 
   window.renderChecklist = function () {
@@ -3114,13 +3213,13 @@
       c.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm space-y-2 text-[11px]';
       c.innerHTML = `
         <div class="flex items-center justify-between"><span class="font-bold text-slate-700">結算／統計幣別</span>
-          <div class="flex gap-1"><button type="button" data-cur="TWD" class="px-2 py-0.5 rounded font-bold"></button><button type="button" data-cur="JPY" class="px-2 py-0.5 rounded font-bold"></button></div></div>
+          <div class="flex gap-1"><button type="button" data-cur="TWD" class="px-2 py-0.5 rounded font-bold"></button><button type="button" data-cur="JPY" class="px-2 py-0.5 rounded font-bold"></button><button type="button" data-cur="SPLIT" class="px-2 py-0.5 rounded font-bold"></button></div></div>
         <div class="flex items-center gap-1.5"><span class="text-slate-600 whitespace-nowrap">1 日圓 =</span>
           <input id="fx-rate" type="number" step="any" min="0" class="w-20 border border-slate-200 rounded p-1 outline-none"><span class="text-slate-600">台幣</span>
           <button type="button" id="fx-auto" class="ml-auto bg-slate-100 border border-slate-200 rounded px-2 py-1 font-bold text-slate-700">自動更新</button></div>
         <p id="fx-status" class="text-[10px] text-slate-400"></p>`;
       header.parentNode.insertBefore(c, header.nextSibling);
-      c.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { currentTripData.displayCurrency = b.dataset.cur; saveTripToCloud(); if (b.dataset.cur === 'JPY') autoRate(false, true); });
+      c.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { currentTripData.displayCurrency = b.dataset.cur; saveTripToCloud(); if (b.dataset.cur !== 'TWD') autoRate(false, b.dataset.cur === 'JPY'); });
       $('fx-rate').onchange = () => {
         const v = Number($('fx-rate').value);
         if (!(v > 0)) { showToast('匯率必須大於 0', 'error'); updateFxCard(); return; }
@@ -3133,10 +3232,10 @@
   }
   function updateFxCard() {
     const c = $('fx-card'); if (!c) return;
-    const cur = dispCur();
+    const sel = isSplit() ? 'SPLIT' : dispCur();
     c.querySelectorAll('[data-cur]').forEach(b => {
-      b.textContent = b.dataset.cur === 'TWD' ? '台幣 NT$' : '日圓 ¥';
-      b.className = 'px-2 py-0.5 rounded font-bold ' + (b.dataset.cur === cur ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600');
+      b.textContent = { TWD: '台幣 NT$', JPY: '日圓 ¥', SPLIT: '分開計算' }[b.dataset.cur];
+      b.className = 'px-2 py-0.5 rounded font-bold ' + (b.dataset.cur === sel ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600');
     });
     if (document.activeElement !== $('fx-rate')) $('fx-rate').value = getRate() || '';
     const mode = currentTripData.jpyRateMode, at = currentTripData.jpyRateAt ? new Date(currentTripData.jpyRateAt).toLocaleString('zh-TW', { hour12: false }) : '';
@@ -3214,6 +3313,21 @@
   // 進入花費頁時（若需要）自動取得匯率
   const _g16 = window.goToPage;
   window.goToPage = function (p) { const r = _g16(p); if (p === 3) autoRate(false); return r; };
+
+  /* ============ 17. 首頁背景：自訂背景不加黑色覆蓋層（預設背景維持原樣） ============ */
+  const HOME_OVERLAY = 'linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85))';
+  const HOME_DEFAULT_BG = 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=80';
+  function applyHomeBg() {
+    const home = $('page-home'); if (!home) return;
+    let custom = ''; try { custom = store.get('home_custom_bg') || ''; } catch (e) {}
+    if (custom) { home.style.backgroundImage = `url('${custom}')`; home.classList.add('home-custom'); }
+    else { home.style.backgroundImage = `${HOME_OVERLAY}, url('${HOME_DEFAULT_BG}')`; home.classList.remove('home-custom'); }
+  }
+  ['saveHomeBackground', 'resetHomeBackground'].forEach(n => { const f = window[n]; window[n] = function () { const r = f.apply(this, arguments); applyHomeBg(); return r; }; });
+  const _goHome17 = window.goHomeLanding;
+  window.goHomeLanding = async function () { const r = await _goHome17(); applyHomeBg(); return r; };
+  window.applyHomeBg = applyHomeBg;
+  applyHomeBg();
 })();
 </script>
 

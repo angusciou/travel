@@ -367,6 +367,21 @@
 
             <!-- 第 5 頁：匯出與總覽 -->
             <div id="page-5" class="space-y-3 page-panel hidden">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">🛍️ 購物計劃</h2>
+                    <button type="button" onclick="openShopModal()" class="bg-pink-600 text-white text-[10px] px-2.5 py-1 rounded font-medium">＋ 新增</button>
+                </div>
+                <div id="shop-summary" class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-[11px] space-y-1"></div>
+                <div id="shop-filter" class="flex gap-1.5 text-[11px]">
+                    <button type="button" data-f="all" class="flex-1 py-1 rounded font-bold">全部</button>
+                    <button type="button" data-f="todo" class="flex-1 py-1 rounded font-bold">未購買</button>
+                    <button type="button" data-f="done" class="flex-1 py-1 rounded font-bold">已購買</button>
+                </div>
+                <div id="shop-list" class="space-y-2"></div>
+            </div>
+
+            <!-- 第 6 頁：匯出與總覽 -->
+            <div id="page-6" class="space-y-3 page-panel hidden">
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 text-xs">
                     <h2 class="text-sm font-bold text-slate-900 border-b pb-2"><i class="fa-solid fa-cloud-arrow-down mr-1 text-slate-700"></i> 雲端與匯出總覽</h2>
                     <div>
@@ -772,7 +787,7 @@
         let currentTripId = store.get('last_trip_id') || 'default_trip';
         let currentTripData = getInitialTripData();
         let currentPage = 1;
-        const totalPages = 5;
+        const totalPages = 6;
         let activeDayTab = 1;
         let deferredPrompt = null;
         let parsedExcelEvents = [];
@@ -2519,7 +2534,7 @@
         });
         if (!html) html = '<p class="text-slate-400 text-center py-2">目前沒有待結算的分帳款項</p>';
         html = '<div class="text-[10px] text-slate-500">不同幣別分開計算：台幣與日圓各自結算，互不換算。「自行付款」的支出不列入結算。</div>' + html;
-      } else if (needRate(expenses)) {
+      } else if (needRate((expenses || []).filter(e => e.splitMode !== 'self'))) {          // 自行付款不進結算，不需匯率
         box.innerHTML = '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-center py-2 px-2">有不同幣別的支出，請先在上方設定匯率才能統一換算結算（或改選「分開計算」）。</p>'; return;
       } else {
         html = '<div class="text-[10px] text-slate-500">僅同一組兩人之間的互欠會相互抵銷，不同人之間的債務不會轉嫁。「自行付款」的支出不列入結算。</div>' + settlementBlock(expenses || [], dispCur(), null);
@@ -2603,6 +2618,12 @@
       if (!it.linkedExpenseId) return;
       const ex = (currentTripData.expenses || []).find(x => x.id === it.linkedExpenseId);
       if (ex) { it.cost = Number(ex.amount); it.costCurrency = curOf(ex.currency); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
+    });
+    (currentTripData.shopping || []).forEach(sh => {                // 購物計劃 ↔ 花費：花費被刪除則還原為未購買；金額／幣別以花費為準
+      if (!sh.expenseId) return;
+      const ex = (currentTripData.expenses || []).find(x => x.id === sh.expenseId);
+      if (!ex) { sh.bought = false; sh.expenseId = null; return; }
+      sh.amount = Number(ex.amount); sh.currency = curOf(ex.currency);
     });
     if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
       store.remove('local_trip_default_trip');
@@ -2941,14 +2962,16 @@
   /* ============ 8. 導覽：缺少匯出頁按鈕、底部選取狀態、滑動誤觸、日期分頁越界 ============ */
   const nav = document.querySelector('nav');
   if (nav && !$('nav-btn-5')) {
-    const b = document.createElement('button');
-    b.id = 'nav-btn-5'; b.onclick = () => goToPage(5);
-    b.className = 'flex flex-col items-center gap-0.5 text-[10px] font-bold';
-    b.innerHTML = '<i class="fa-solid fa-cloud-arrow-down text-base"></i> <span>匯出</span>';
-    nav.appendChild(b);
+    [[5, 'bag-shopping', '購物'], [6, 'cloud-arrow-down', '匯出']].forEach(([n, icon, label]) => {
+      const b = document.createElement('button');
+      b.id = 'nav-btn-' + n; b.onclick = () => goToPage(n);
+      b.className = 'flex flex-col items-center gap-0.5 text-[10px] font-bold';
+      b.innerHTML = `<i class="fa-solid fa-${icon} text-base"></i> <span>${label}</span>`;
+      nav.appendChild(b);
+    });
   }
   function markNav(active) {
-    ['home', 1, 2, 3, 4, 5].forEach(k => { const b = $('nav-btn-' + k); if (b) { b.classList.toggle('text-amber-600', k === active); b.classList.toggle('text-slate-400', k !== active); } });
+    ['home', 1, 2, 3, 4, 5, 6].forEach(k => { const b = $('nav-btn-' + k); if (b) { b.classList.toggle('text-amber-600', k === active); b.classList.toggle('text-slate-400', k !== active); } });
   }
   const _goToPage = window.goToPage;
   window.goToPage = function (p) {
@@ -3516,6 +3539,201 @@
     await _login19(e);
     if (currentUser && !myNickRaw()) { showToast('請先設定暱稱／姓名，共編成員才認得出你', 'error'); openModal('auth-modal'); }
   };
+
+  /* ============ 20. 購物計劃：物品、單價、圖片、地點、日期、數量、金額；勾選「已購買」自動加入花費 ============ */
+  const shopList = () => (currentTripData.shopping = Array.isArray(currentTripData.shopping) ? currentTripData.shopping : []);
+  let shopFilter = 'all', shopAmountDirty = false, shopImg = '';
+  const sumByCur = arr => ['TWD', 'JPY'].map(c => [c, arr.filter(i => curOf(i.currency) === c).reduce((s, i) => s + (Number(i.amount) || 0), 0)]).filter(([, n]) => n > 0).map(([c, n]) => fmtMoney(n, c)).join(' ＋ ') || '—';
+  const lastPayer = () => { const e = (currentTripData.expenses || []).filter(x => x.payer).slice(-1)[0]; return e ? e.payer : ''; };
+
+  function renderShopping() {
+    const box = $('shop-list'); if (!box) return;
+    const all = shopList();
+    $('shop-summary').innerHTML = `<div class="flex justify-between"><span class="text-slate-500">未購買（${all.filter(i => !i.bought).length} 項）預計</span><span class="font-bold text-pink-700">${esc(sumByCur(all.filter(i => !i.bought)))}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">已購買（${all.filter(i => i.bought).length} 項）</span><span class="font-bold text-emerald-700">${esc(sumByCur(all.filter(i => i.bought)))}</span></div>`;
+    document.querySelectorAll('#shop-filter [data-f]').forEach(b => { b.className = 'flex-1 py-1 rounded font-bold ' + (b.dataset.f === shopFilter ? 'bg-pink-600 text-white' : 'bg-white text-slate-600 border border-slate-200'); });
+    const items = all.filter(i => shopFilter === 'all' || (shopFilter === 'todo' ? !i.bought : i.bought))
+      .sort((a, b) => (a.bought - b.bought) || String(a.date || '9999').localeCompare(String(b.date || '9999')) || String(a.name).localeCompare(String(b.name)));
+    if (!items.length) { box.innerHTML = '<div class="text-center py-8 text-slate-400 bg-white rounded-xl text-xs border border-slate-200">還沒有購物項目，點右上角「＋ 新增」</div>'; return; }
+    box.innerHTML = items.map(it => {
+      const cur = curOf(it.currency);
+      return `<div data-id="${esc(it.id)}" class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex gap-2.5 cursor-pointer ${it.bought ? 'opacity-70' : ''}">
+        <div class="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center text-xl">${it.image ? `<img src="${esc(it.image)}" class="w-full h-full object-cover" alt="" onerror="this.style.display='none'">` : '🛍️'}</div>
+        <div class="min-w-0 flex-1 text-xs">
+          <div class="flex items-start justify-between gap-1"><h4 class="font-bold truncate ${it.bought ? 'line-through text-slate-400' : 'text-slate-800'}">${esc(it.name)}</h4>
+            <button type="button" data-act="del" class="text-slate-300 hover:text-red-500 p-0.5 flex-shrink-0">🗑</button></div>
+          <p class="text-[10px] text-slate-500">${fmtMoney(Number(it.price) || 0, cur)} × ${esc(it.qty)} = <b class="text-slate-800">${fmtMoney(Number(it.amount) || 0, cur)}</b></p>
+          <p class="text-[10px] text-slate-500 truncate">${it.place ? '📍' + esc(it.place) : ''}${it.place && it.date ? '　' : ''}${it.date ? '📅' + esc(it.date) : ''}</p>
+          <label class="inline-flex items-center gap-1 mt-1 cursor-pointer"><input type="checkbox" data-act="buy" ${it.bought ? 'checked' : ''} class="w-4 h-4 accent-emerald-600"><span class="font-bold">已購買</span>${it.bought ? '<span class="text-[9px] text-emerald-600">已加入花費</span>' : ''}</label>
+        </div></div>`;
+    }).join('');
+  }
+  window.renderShopping = renderShopping;
+  $('shop-filter').onclick = e => { const f = e.target.dataset && e.target.dataset.f; if (f) { shopFilter = f; renderShopping(); } };
+  $('shop-list').onclick = e => {
+    const row = e.target.closest('[data-id]'); if (!row) return;
+    if (e.target.closest('label')) return;                                   // 勾選由 change 事件處理
+    if (e.target.closest('[data-act="del"]')) return deleteShopItem(row.dataset.id);
+    openShopModal(row.dataset.id);
+  };
+  $('shop-list').onchange = e => { const t = e.target; if (t.dataset && t.dataset.act === 'buy') setBought(t.closest('[data-id]').dataset.id, t.checked); };
+
+  // 記帳設定：付款人、分帳方式、分攤成員（共編專案預設付款人＝自己，且只能選共編成員）
+  function resolveAcct(it) {
+    let payer = String(it.payer || '').trim(), mode = it.splitMode || 'self', parts = (it.parts || []).slice();
+    if (enforcePerm()) {
+      const members = tripMembers(), names = members.map(m => m.name), me = members.find(m => m.email === myEmail());
+      if (!names.includes(payer)) payer = me ? me.name : '';
+      if (!payer) return null;
+      if (mode === 'self') parts = [payer]; else { parts = parts.filter(x => names.includes(x)); if (!parts.length) parts = names.slice(); }
+      return { payer, mode, parts };
+    }
+    if (!payer) payer = lastPayer();
+    if (!payer) return null;
+    if (mode === 'self') parts = [payer]; else if (!parts.length) return null;
+    return { payer, mode, parts };
+  }
+  function expenseFields(it, a) {
+    return { title: it.name + (Number(it.qty) > 1 ? ` ×${it.qty}` : ''), amount: Number(it.amount) || 0, currency: curOf(it.currency), date: it.date || localToday(), payer: a.payer, category: 'shopping', splitMode: a.mode, participants: a.parts };
+  }
+  function setBought(id, checked) {
+    const it = shopList().find(x => x.id === id); if (!it) return;
+    if (checked) {
+      if (!(Number(it.amount) > 0)) { showToast('金額必須大於 0 才能加入花費', 'error'); renderShopping(); return; }
+      const a = resolveAcct(it);
+      if (!a) { showToast('請先填寫記帳設定的付款人，儲存後會自動完成購買', 'error'); window.__pendingBuy = id; renderShopping(); openShopModal(id, true); return; }
+      if (!Array.isArray(currentTripData.expenses)) currentTripData.expenses = [];
+      const exId = 'ex_' + Date.now() + '_s' + Math.random().toString(36).slice(2, 5);
+      if (!it.date) it.date = localToday();
+      currentTripData.expenses.push({ id: exId, ...expenseFields(it, a), shoppingId: it.id });
+      it.bought = true; it.expenseId = exId;
+      saveTripToCloud(); showToast(`已購買，並加入花費：${fmtMoney(Number(it.amount), it.currency)}`, 'success');
+    } else {
+      if (it.expenseId && !confirm('取消「已購買」會一併刪除對應的花費記錄，確定嗎？')) { renderShopping(); return; }
+      currentTripData.expenses = (currentTripData.expenses || []).filter(x => x.id !== it.expenseId);
+      it.bought = false; it.expenseId = null;
+      saveTripToCloud();
+    }
+  }
+  function deleteShopItem(id) {
+    const it = shopList().find(x => x.id === id); if (!it) return;
+    if (!confirm(it.bought ? `刪除「${it.name}」？對應的花費記錄也會一併刪除。` : `刪除「${it.name}」？`)) return;
+    if (it.expenseId) currentTripData.expenses = (currentTripData.expenses || []).filter(x => x.id !== it.expenseId);
+    currentTripData.shopping = shopList().filter(x => x.id !== id);
+    saveTripToCloud();
+  }
+
+  // 新增／編輯視窗
+  function ensureShopModal() {
+    if ($('shop-modal')) return;
+    const m = document.createElement('div');
+    m.id = 'shop-modal'; m.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden';
+    const inp = 'w-full border border-slate-200 rounded p-1.5 outline-none';
+    m.innerHTML = `
+      <div class="bg-white rounded-2xl max-w-sm w-full p-4 shadow-xl relative text-xs max-h-[90vh] overflow-y-auto">
+        <button type="button" onclick="closeModal('shop-modal')" class="absolute top-3 right-3 text-slate-400 text-base">✕</button>
+        <h3 id="shop-modal-title" class="font-bold text-slate-900 mb-3 text-sm">新增購物項目</h3>
+        <form id="shop-form" class="space-y-2.5" novalidate>
+          <input type="hidden" id="shop-edit-id">
+          <div><label class="block font-bold text-slate-700 mb-1">物品名稱</label><input id="shop-name" maxlength="60" placeholder="例: 抹茶巧克力" class="${inp}"></div>
+          <div class="grid grid-cols-3 gap-2">
+            <div><label class="block font-bold text-slate-700 mb-1">單價</label><input id="shop-price" type="number" step="any" min="0" class="${inp}"></div>
+            <div><label class="block font-bold text-slate-700 mb-1">數量</label><input id="shop-qty" type="number" step="any" min="0" value="1" class="${inp}"></div>
+            <div><label class="block font-bold text-slate-700 mb-1">幣別</label><select id="shop-currency" class="${inp} bg-slate-50"><option value="TWD">台幣</option><option value="JPY">日圓</option></select></div>
+          </div>
+          <div><label class="block font-bold text-slate-700 mb-1">金額 <span class="font-normal text-slate-400">(預設 = 單價 × 數量，可手動修改)</span></label><input id="shop-amount" type="number" step="any" min="0" class="${inp}"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block font-bold text-slate-700 mb-1">購買地點</label><input id="shop-place" maxlength="60" placeholder="例: 京都車站" class="${inp}"></div>
+            <div><label class="block font-bold text-slate-700 mb-1">預計購買日期</label><input id="shop-date" type="date" class="${inp}"></div>
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-bold text-slate-700">圖片</label>
+            <div class="flex items-center gap-2"><div class="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center text-xl flex-shrink-0"><img id="shop-img-preview" alt="" class="w-full h-full object-cover hidden"><span id="shop-img-ph">🛍️</span></div>
+              <div class="flex-1 space-y-1"><input id="shop-img-file" type="file" accept="image/*" class="w-full border border-slate-200 rounded p-1 text-[11px] bg-slate-50"><input id="shop-img-url" type="url" placeholder="或貼上圖片網址 https://..." class="${inp}"></div></div>
+            <button type="button" id="shop-img-clear" class="text-[11px] text-slate-500 underline">移除圖片</button>
+          </div>
+          <details id="shop-acct" class="border border-slate-200 rounded-lg p-2">
+            <summary class="font-bold text-slate-700 cursor-pointer">記帳設定（勾選「已購買」時用）</summary>
+            <div class="space-y-2 mt-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div><label class="block font-bold text-slate-700 mb-1">付款人</label><input id="shop-payer" placeholder="例: 小明" class="${inp}"></div>
+                <div><label class="block font-bold text-slate-700 mb-1">分帳模式</label><select id="shop-mode" class="${inp} bg-slate-50"><option value="self">自行付款(無需分攤)</option><option value="normal">均分模式</option><option value="payer_excluded">代墊模式(不含付款人)</option></select></div>
+              </div>
+              <div><label class="block font-bold text-slate-700 mb-1">參與分攤成員 (逗號分隔)</label><input id="shop-parts" class="${inp}"></div>
+              <p class="text-[10px] text-slate-400">預設為「自行付款」。共編專案若沒指定付款人，會以你自己為付款人。</p>
+            </div>
+          </details>
+          <button type="submit" class="w-full bg-pink-600 text-white font-semibold py-2 rounded-lg shadow-sm">儲存</button>
+        </form>
+      </div>`;
+    document.body.appendChild(m);
+    PICK_CFG.push({ payer: 'shop-payer', parts: 'shop-parts', mode: 'shop-mode' });
+    SELF_MAP['shop-mode'] = ['shop-parts'];
+    // 金額自動計算（手動改過金額後就不再覆蓋）
+    const auto = () => { if (shopAmountDirty) return; const v = (Number($('shop-price').value) || 0) * (Number($('shop-qty').value) || 0); $('shop-amount').value = v ? Math.round(v * 100) / 100 : ''; };
+    ['shop-price', 'shop-qty'].forEach(i => $(i).addEventListener('input', auto));
+    $('shop-amount').addEventListener('input', () => { const v = (Number($('shop-price').value) || 0) * (Number($('shop-qty').value) || 0); shopAmountDirty = $('shop-amount').value !== '' && Math.abs(Number($('shop-amount').value) - Math.round(v * 100) / 100) > 0.0001; });
+    const setImg = v => { shopImg = v || ''; const pv = $('shop-img-preview'); pv.classList.toggle('hidden', !shopImg); $('shop-img-ph').classList.toggle('hidden', !!shopImg); if (shopImg) pv.src = shopImg; };
+    window.__setShopImg = setImg;
+    $('shop-img-file').onchange = e => { const f = e.target.files[0]; if (!f) return; resizeImageFile(f, 640, 0.72, d => { if (!d) { showToast('無法讀取這張圖片', 'error'); return; } $('shop-img-url').value = ''; setImg(d); }); };
+    $('shop-img-url').onchange = () => { const v = $('shop-img-url').value.trim(); if (!v) return; if (!/^https?:\/\//i.test(v)) { showToast('圖片網址必須以 http:// 或 https:// 開頭', 'error'); return; } setImg(v); };
+    $('shop-img-clear').onclick = () => { $('shop-img-file').value = ''; $('shop-img-url').value = ''; setImg(''); };
+    $('shop-form').onsubmit = saveShopItem;
+  }
+  window.openShopModal = function (id, openAcct) {
+    ensureShopModal();
+    const it = id ? shopList().find(x => x.id === id) : null;
+    $('shop-edit-id').value = it ? it.id : '';
+    $('shop-modal-title').textContent = it ? '編輯購物項目' : '新增購物項目';
+    $('shop-name').value = it ? it.name : ''; $('shop-price').value = it ? it.price : ''; $('shop-qty').value = it ? it.qty : 1;
+    $('shop-currency').value = it ? curOf(it.currency) : lastCur; $('shop-amount').value = it ? it.amount : '';
+    $('shop-place').value = it ? it.place || '' : ''; $('shop-date').value = it ? it.date || '' : '';
+    $('shop-img-file').value = ''; $('shop-img-url').value = it && /^https?:/i.test(it.image || '') ? it.image : ''; window.__setShopImg(it ? it.image || '' : '');
+    shopAmountDirty = !!it && Math.abs((Number(it.amount) || 0) - Math.round((Number(it.price) || 0) * (Number(it.qty) || 0) * 100) / 100) > 0.0001;
+    $('shop-payer').value = it ? it.payer || '' : ''; $('shop-mode').value = it ? it.splitMode || 'self' : 'self';
+    $('shop-parts').disabled = false; $('shop-parts').value = it && it.parts ? it.parts.join(', ') : knownPeople();
+    $('shop-acct').open = !!openAcct;
+    if (!it && !openAcct) window.__pendingBuy = null;
+    applyAllSelf();
+    $('shop-modal').classList.remove('hidden');
+  };
+
+  function saveShopItem(e) {
+    e.preventDefault();
+    const name = $('shop-name').value.trim(), price = Number($('shop-price').value) || 0, qty = Number($('shop-qty').value), amount = Number($('shop-amount').value);
+    if (!name) { showToast('請輸入物品名稱', 'error'); $('shop-name').focus(); return; }
+    if (!(qty > 0)) { showToast('數量必須大於 0', 'error'); $('shop-qty').focus(); return; }
+    if (price < 0 || !(amount >= 0)) { showToast('單價與金額不可為負數', 'error'); return; }
+    const mode = $('shop-mode').value;
+    if (mode === 'self') $('shop-parts').value = '';
+    const parts = mode === 'self' ? [] : $('shop-parts').value.split(',').map(x => x.trim()).filter(Boolean);
+    const payer = $('shop-payer').value.trim();
+    if (enforcePerm() && (payer || parts.length)) {
+      const names = new Set(tripMembers().map(m => m.name));
+      if (payer && !names.has(payer)) { showToast('共編專案的付款人必須從共編成員中選擇', 'error'); return; }
+      const bad = parts.filter(p => !names.has(p)); if (bad.length) { showToast('分攤成員必須是共編成員：' + bad.join('、'), 'error'); return; }
+    }
+    const editId = $('shop-edit-id').value;
+    let it = editId ? shopList().find(x => x.id === editId) : null;
+    if (!it) { it = { id: 's_' + Date.now() + Math.random().toString(36).slice(2, 5), bought: false, expenseId: null }; shopList().push(it); }
+    Object.assign(it, { name, price, qty, currency: curOf($('shop-currency').value), amount, place: $('shop-place').value.trim(), date: $('shop-date').value, image: shopImg, payer, splitMode: mode, parts });
+    lastCur = it.currency;
+    if (it.bought && it.expenseId) {                                         // 已購買：同步更新對應的花費
+      const ex = (currentTripData.expenses || []).find(x => x.id === it.expenseId), a = resolveAcct(it);
+      if (ex && a) Object.assign(ex, expenseFields(it, a));
+    }
+    $('shop-modal').classList.add('hidden');
+    const pend = window.__pendingBuy; window.__pendingBuy = null;
+    if (pend === it.id && !it.bought && resolveAcct(it)) { saveTripToCloud(); setBought(it.id, true); return; }
+    saveTripToCloud(); showToast('已儲存購物項目', 'success');
+  }
+
+  // 與既有流程接上：資料更新時重畫、進入購物頁時重畫
+  const _rtd20 = window.renderTripData;
+  window.renderTripData = function () { _rtd20(); renderShopping(); };
+  const _g20 = window.goToPage;
+  window.goToPage = function (p) { const r = _g20(p); if (p === 5) renderShopping(); return r; };
+  renderShopping();
 })();
 </script>
 

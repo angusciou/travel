@@ -2773,6 +2773,11 @@
         showToast('這是別人分享給你的共編專案，只有擁有者可以刪除', 'error'); return;
       }
       if (!confirm('確定要刪除這個旅遊專案嗎？刪除後無法復原。')) return;
+      if (supabaseClient && currentUser) {                                        // 先清除這個專案在雲端儲存的所有照片
+        const pr = await purgeTripImages(id);
+        if (!pr.ok) { showToast('照片清除失敗，專案未刪除：' + pr.error, 'error'); return; }
+        if (pr.removed) showToast(`已一併刪除 ${pr.removed} 張照片`, 'info');
+      }
       store.remove('local_trip_' + id);
       try {
         if (supabaseClient && currentUser) {
@@ -3168,13 +3173,51 @@
     img.onerror = () => { URL.revokeObjectURL(url); cb(null); };
     img.src = url;
   }
-  const imgHandler = (targetId, maxW, okMsg) => function (e) {
+  const fmtBytes = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
+  const IMG_LIMITS = { shop: { maxDim: 1280, maxBytes: 300 * 1024 }, shopCloud: { maxDim: 2560, maxBytes: 3 * 1024 * 1024 }, cover: { maxDim: 1600, maxBytes: 500 * 1024 }, bg: { maxDim: 1920, maxBytes: 800 * 1024 } };
+  const MAX_ORIGINAL = 30 * 1024 * 1024;                       // 原圖超過 30MB 直接拒絕（解碼會佔用大量記憶體）
+  function loadImageFile(file) {
+    return new Promise((res, rej) => { const url = URL.createObjectURL(file), img = new Image(); img.onload = () => { URL.revokeObjectURL(url); res(img); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('decode')); }; img.src = url; });
+  }
+  const blobToDataUrl = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('read')); r.readAsDataURL(blob); });
+  const canvasToBlob = (c, q) => new Promise(res => c.toBlob(res, 'image/jpeg', q));
+  async function compressImage(file, lim) {
+    if (!file || !/^image\//.test(file.type)) throw new Error('這不是圖片檔');
+    if (file.size > MAX_ORIGINAL) throw new Error(`圖片超過 ${fmtBytes(MAX_ORIGINAL)}，請先縮小再上傳`);
+    let img; try { img = await loadImageFile(file); } catch (e) { throw new Error('無法讀取這張圖片（請改用 JPG 或 PNG）'); }
+    const longSide = Math.max(img.width, img.height);
+    if (file.size <= lim.maxBytes && longSide <= lim.maxDim) return { dataUrl: await blobToDataUrl(file), blob: file, from: file.size, to: file.size, changed: false };
+    let dim = Math.min(lim.maxDim, longSide), q = 0.88, blob = null, c = document.createElement('canvas');
+    for (let i = 0; i < 14; i++) {                              // 先降畫質，到下限後再縮小尺寸，直到符合大小上限
+      const sc = dim / longSide;
+      c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      blob = await canvasToBlob(c, q);
+      if (blob && blob.size <= lim.maxBytes) break;
+      if (q > 0.55) q = Math.round((q - 0.1) * 100) / 100; else { dim = Math.round(dim * 0.8); q = 0.8; }
+    }
+    if (!blob || blob.size > lim.maxBytes) throw new Error(`無法壓縮到 ${fmtBytes(lim.maxBytes)} 以內，請換一張圖片`);
+    return { dataUrl: await blobToDataUrl(blob), blob, from: file.size, to: blob.size, changed: true };
+  }
+  window.compressImage = compressImage;
+  // 上傳並套用結果；回傳 dataUrl 或 null。超過限制時自動轉檔並提示壓縮前後大小
+  async function processUploadRaw(file, lim, okMsg) {
+    try {
+      const r = await compressImage(file, lim);
+      showToast(r.changed ? `圖片已自動壓縮：${fmtBytes(r.from)} → ${fmtBytes(r.to)}` : (okMsg || '圖片就緒'), 'success');
+      return r;
+    } catch (e) { showToast(e.message || '無法處理這張圖片', 'error'); return null; }
+  }
+  async function processUpload(file, lim, okMsg) { const r = await processUploadRaw(file, lim, okMsg); return r ? r.dataUrl : null; }
+  window.processUpload = processUpload; window.processUploadRaw = processUploadRaw; window.IMG_LIMITS = IMG_LIMITS;
+  const imgHandler = (targetId, lim, okMsg) => async function (e) {
     const f = e.target.files[0]; if (!f) return;
-    resizeImageFile(f, maxW, 0.8, d => { if (!d) { showToast('無法讀取這張圖片', 'error'); return; } $(targetId).value = d; showToast(okMsg, 'success'); });
+    const d = await processUpload(f, lim, okMsg);
+    if (d) $(targetId).value = d; else e.target.value = '';
   };
-  window.handleEditCoverUpload = imgHandler('input-trip-cover-base64', 1200, '圖片就緒');
-  window.handleNewCoverUpload = imgHandler('new-trip-cover-base64', 1200, '圖片就緒');
-  window.handleHomeBgUpload = imgHandler('input-home-bg-base64', 1600, '背景圖片就緒');
+  window.handleEditCoverUpload = imgHandler('input-trip-cover-base64', IMG_LIMITS.cover, '圖片就緒');
+  window.handleNewCoverUpload = imgHandler('new-trip-cover-base64', IMG_LIMITS.cover, '圖片就緒');
+  window.handleHomeBgUpload = imgHandler('input-home-bg-base64', IMG_LIMITS.bg, '背景圖片就緒');
 
   // 選同一個 Excel 檔案第二次時，瀏覽器不會觸發 change；讀取後清空即可重選
   const _excelUp = window.handleExcelFileUpload;
@@ -3542,7 +3585,7 @@
 
   /* ============ 20. 購物計劃：物品、單價、圖片、地點、日期、數量、金額；勾選「已購買」自動加入花費 ============ */
   const shopList = () => (currentTripData.shopping = Array.isArray(currentTripData.shopping) ? currentTripData.shopping : []);
-  let shopFilter = 'all', shopAmountDirty = false, shopImg = '';
+  let shopFilter = 'all', shopAmountDirty = false, shopPreview = '', shopPending = null, shopDropOld = false, shopOldPath = '';
   const sumByCur = arr => ['TWD', 'JPY'].map(c => [c, arr.filter(i => curOf(i.currency) === c).reduce((s, i) => s + (Number(i.amount) || 0), 0)]).filter(([, n]) => n > 0).map(([c, n]) => fmtMoney(n, c)).join(' ＋ ') || '—';
   const lastPayer = () => { const e = (currentTripData.expenses || []).filter(x => x.payer).slice(-1)[0]; return e ? e.payer : ''; };
 
@@ -3558,7 +3601,7 @@
     box.innerHTML = items.map(it => {
       const cur = curOf(it.currency);
       return `<div data-id="${esc(it.id)}" class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex gap-2.5 cursor-pointer ${it.bought ? 'opacity-70' : ''}">
-        <div class="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center text-xl">${it.image ? `<img src="${esc(it.image)}" class="w-full h-full object-cover" alt="" onerror="this.style.display='none'">` : '🛍️'}</div>
+        <div ${(it.image || it.imagePath) ? `data-zoom="${esc(it.id)}" title="點擊放大"` : ''} ${it.imagePath ? `data-path="${esc(it.imagePath)}"` : ''} class="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center text-xl ${(it.image || it.imagePath) ? 'cursor-zoom-in' : ''}">${shopThumb(it)}</div>
         <div class="min-w-0 flex-1 text-xs">
           <div class="flex items-start justify-between gap-1"><h4 class="font-bold truncate ${it.bought ? 'line-through text-slate-400' : 'text-slate-800'}">${esc(it.name)}</h4>
             <button type="button" data-act="del" class="text-slate-300 hover:text-red-500 p-0.5 flex-shrink-0">🗑</button></div>
@@ -3567,11 +3610,14 @@
           <label class="inline-flex items-center gap-1 mt-1 cursor-pointer"><input type="checkbox" data-act="buy" ${it.bought ? 'checked' : ''} class="w-4 h-4 accent-emerald-600"><span class="font-bold">已購買</span>${it.bought ? '<span class="text-[9px] text-emerald-600">已加入花費</span>' : ''}</label>
         </div></div>`;
     }).join('');
+    hydrateShopImages(); updateMigrateBanner();
   }
   window.renderShopping = renderShopping;
   $('shop-filter').onclick = e => { const f = e.target.dataset && e.target.dataset.f; if (f) { shopFilter = f; renderShopping(); } };
   $('shop-list').onclick = e => {
     const row = e.target.closest('[data-id]'); if (!row) return;
+    const z = e.target.closest('[data-zoom]');
+    if (z) { openShopImage(z.dataset.zoom); return; }                         // 點縮圖放大，不開啟編輯
     if (e.target.closest('label')) return;                                   // 勾選由 change 事件處理
     if (e.target.closest('[data-act="del"]')) return deleteShopItem(row.dataset.id);
     openShopModal(row.dataset.id);
@@ -3618,6 +3664,7 @@
   function deleteShopItem(id) {
     const it = shopList().find(x => x.id === id); if (!it) return;
     if (!confirm(it.bought ? `刪除「${it.name}」？對應的花費記錄也會一併刪除。` : `刪除「${it.name}」？`)) return;
+    if (it.imagePath) removeFromStorage([it.imagePath]);
     if (it.expenseId) currentTripData.expenses = (currentTripData.expenses || []).filter(x => x.id !== it.expenseId);
     currentTripData.shopping = shopList().filter(x => x.id !== id);
     saveTripToCloud();
@@ -3651,6 +3698,7 @@
             <div class="flex items-center gap-2"><div class="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center text-xl flex-shrink-0"><img id="shop-img-preview" alt="" class="w-full h-full object-cover hidden"><span id="shop-img-ph">🛍️</span></div>
               <div class="flex-1 space-y-1"><input id="shop-img-file" type="file" accept="image/*" class="w-full border border-slate-200 rounded p-1 text-[11px] bg-slate-50"><input id="shop-img-url" type="url" placeholder="或貼上圖片網址 https://..." class="${inp}"></div></div>
             <button type="button" id="shop-img-clear" class="text-[11px] text-slate-500 underline">移除圖片</button>
+            <p id="shop-img-hint" class="text-[10px] text-slate-400"></p>
           </div>
           <details id="shop-acct" class="border border-slate-200 rounded-lg p-2">
             <summary class="font-bold text-slate-700 cursor-pointer">記帳設定（勾選「已購買」時用）</summary>
@@ -3673,12 +3721,17 @@
     const auto = () => { if (shopAmountDirty) return; const v = (Number($('shop-price').value) || 0) * (Number($('shop-qty').value) || 0); $('shop-amount').value = v ? Math.round(v * 100) / 100 : ''; };
     ['shop-price', 'shop-qty'].forEach(i => $(i).addEventListener('input', auto));
     $('shop-amount').addEventListener('input', () => { const v = (Number($('shop-price').value) || 0) * (Number($('shop-qty').value) || 0); shopAmountDirty = $('shop-amount').value !== '' && Math.abs(Number($('shop-amount').value) - Math.round(v * 100) / 100) > 0.0001; });
-    const setImg = v => { shopImg = v || ''; const pv = $('shop-img-preview'); pv.classList.toggle('hidden', !shopImg); $('shop-img-ph').classList.toggle('hidden', !!shopImg); if (shopImg) pv.src = shopImg; };
+    const setImg = v => { const pv = $('shop-img-preview'); pv.classList.toggle('hidden', !v); $('shop-img-ph').classList.toggle('hidden', !!v); if (v) pv.src = v; else pv.removeAttribute('src'); shopPreview = v || ''; };
     window.__setShopImg = setImg;
-    $('shop-img-file').onchange = e => { const f = e.target.files[0]; if (!f) return; resizeImageFile(f, 640, 0.72, d => { if (!d) { showToast('無法讀取這張圖片', 'error'); return; } $('shop-img-url').value = ''; setImg(d); }); };
-    $('shop-img-url').onchange = () => { const v = $('shop-img-url').value.trim(); if (!v) return; if (!/^https?:\/\//i.test(v)) { showToast('圖片網址必須以 http:// 或 https:// 開頭', 'error'); return; } setImg(v); };
-    $('shop-img-clear').onclick = () => { $('shop-img-file').value = ''; $('shop-img-url').value = ''; setImg(''); };
-    $('shop-form').onsubmit = saveShopItem;
+    $('shop-img-file').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      const r = await processUploadRaw(f, storageReady() ? IMG_LIMITS.shopCloud : IMG_LIMITS.shop);          // 已登入：存雲端，上限 3MB；未登入：存本機，上限 300KB
+      if (r) { $('shop-img-url').value = ''; shopPending = { file: f, blob: r.blob, dataUrl: r.dataUrl }; shopDropOld = true; setImg(r.dataUrl); } else e.target.value = '';
+    };
+    $('shop-img-url').onchange = () => { const v = $('shop-img-url').value.trim(); if (!v) return; if (!/^https?:\/\//i.test(v)) { showToast('圖片網址必須以 http:// 或 https:// 開頭', 'error'); return; } shopPending = null; shopDropOld = true; setImg(v); };
+    $('shop-img-clear').onclick = () => { $('shop-img-file').value = ''; $('shop-img-url').value = ''; shopPending = null; shopDropOld = true; setImg(''); };
+    $('shop-img-preview').onclick = () => { if (shopPreview) openLightbox(shopPreview, $('shop-name').value.trim()); };
+    $('shop-form').onsubmit = e => { saveShopItem(e); };
   }
   window.openShopModal = function (id, openAcct) {
     ensureShopModal();
@@ -3688,7 +3741,12 @@
     $('shop-name').value = it ? it.name : ''; $('shop-price').value = it ? it.price : ''; $('shop-qty').value = it ? it.qty : 1;
     $('shop-currency').value = it ? curOf(it.currency) : lastCur; $('shop-amount').value = it ? it.amount : '';
     $('shop-place').value = it ? it.place || '' : ''; $('shop-date').value = it ? it.date || '' : '';
-    $('shop-img-file').value = ''; $('shop-img-url').value = it && /^https?:/i.test(it.image || '') ? it.image : ''; window.__setShopImg(it ? it.image || '' : '');
+    $('shop-img-file').value = ''; $('shop-img-url').value = it && /^https?:/i.test(it.image || '') ? it.image : '';
+    shopPending = null; shopDropOld = false; shopOldPath = it && it.imagePath ? it.imagePath : '';
+    window.__setShopImg(it ? (it.image || '') : '');
+    if (it && it.imagePath) signedUrlFor(it.imagePath).then(u => { if (u && shopOldPath === it.imagePath && !shopDropOld) window.__setShopImg(u); });
+    $('shop-img-hint').textContent = storageReady() ? `已登入：照片會存到雲端（只在專案資料裡記路徑），單張上限 ${fmtBytes(IMG_LIMITS.shopCloud.maxBytes)}，超過會自動壓縮轉檔。點縮圖可放大。`
+      : `未登入：照片存在這台裝置，單張上限 ${fmtBytes(IMG_LIMITS.shop.maxBytes)}，超過會自動壓縮。登入後可存 ${fmtBytes(IMG_LIMITS.shopCloud.maxBytes)} 的大圖到雲端。`;
     shopAmountDirty = !!it && Math.abs((Number(it.amount) || 0) - Math.round((Number(it.price) || 0) * (Number(it.qty) || 0) * 100) / 100) > 0.0001;
     $('shop-payer').value = it ? it.payer || '' : ''; $('shop-mode').value = it ? it.splitMode || 'self' : 'self';
     $('shop-parts').disabled = false; $('shop-parts').value = it && it.parts ? it.parts.join(', ') : knownPeople();
@@ -3698,7 +3756,7 @@
     $('shop-modal').classList.remove('hidden');
   };
 
-  function saveShopItem(e) {
+  async function saveShopItem(e) {
     e.preventDefault();
     const name = $('shop-name').value.trim(), price = Number($('shop-price').value) || 0, qty = Number($('shop-qty').value), amount = Number($('shop-amount').value);
     if (!name) { showToast('請輸入物品名稱', 'error'); $('shop-name').focus(); return; }
@@ -3713,19 +3771,40 @@
       if (payer && !names.has(payer)) { showToast('共編專案的付款人必須從共編成員中選擇', 'error'); return; }
       const bad = parts.filter(p => !names.has(p)); if (bad.length) { showToast('分攤成員必須是共編成員：' + bad.join('、'), 'error'); return; }
     }
-    const editId = $('shop-edit-id').value;
-    let it = editId ? shopList().find(x => x.id === editId) : null;
-    if (!it) { it = { id: 's_' + Date.now() + Math.random().toString(36).slice(2, 5), bought: false, expenseId: null }; shopList().push(it); }
-    Object.assign(it, { name, price, qty, currency: curOf($('shop-currency').value), amount, place: $('shop-place').value.trim(), date: $('shop-date').value, image: shopImg, payer, splitMode: mode, parts });
-    lastCur = it.currency;
-    if (it.bought && it.expenseId) {                                         // 已購買：同步更新對應的花費
-      const ex = (currentTripData.expenses || []).find(x => x.id === it.expenseId), a = resolveAcct(it);
-      if (ex && a) Object.assign(ex, expenseFields(it, a));
-    }
-    $('shop-modal').classList.add('hidden');
-    const pend = window.__pendingBuy; window.__pendingBuy = null;
-    if (pend === it.id && !it.bought && resolveAcct(it)) { saveTripToCloud(); setBought(it.id, true); return; }
-    saveTripToCloud(); showToast('已儲存購物項目', 'success');
+    const submit = $('shop-form').querySelector('button[type=submit]'); submit.disabled = true; const label = submit.textContent;
+    try {
+      const editId = $('shop-edit-id').value;
+      let it = editId ? shopList().find(x => x.id === editId) : null;
+      // ---- 圖片：待上傳 → 雲端（失敗則退回本機）；移除／改用網址 → 刪除舊的雲端檔
+      let image = it ? it.image || '' : '', imagePath = it ? it.imagePath || '' : '', toRemove = [];
+      if (shopDropOld) { if (imagePath) toRemove.push(imagePath); image = ''; imagePath = ''; if (!shopPending && shopPreview && /^https?:/i.test(shopPreview)) image = shopPreview; }
+      if (shopPending) {
+        submit.textContent = '上傳圖片中…';
+        let done = false;
+        if (storageReady()) {
+          try { imagePath = await uploadToStorage(shopPending.blob); done = true; }
+          catch (err) { showToast('雲端圖片空間無法使用，改存在本機（上限 ' + fmtBytes(IMG_LIMITS.shop.maxBytes) + '）：' + ((err && err.message) || ''), 'error'); }
+        }
+        if (!done) {                                                  // 未登入或雲端失敗：以本機上限重新壓縮後存在專案資料裡
+          try { const r = await compressImage(shopPending.file, IMG_LIMITS.shop); image = r.dataUrl; imagePath = ''; }
+          catch (err) { showToast('圖片未儲存：' + ((err && err.message) || ''), 'error'); image = ''; imagePath = ''; }
+        }
+      }
+      if (!it) { it = { id: 's_' + Date.now() + Math.random().toString(36).slice(2, 5), bought: false, expenseId: null }; shopList().push(it); }
+      Object.assign(it, { name, price, qty, currency: curOf($('shop-currency').value), amount, place: $('shop-place').value.trim(), date: $('shop-date').value, image, imagePath, payer, splitMode: mode, parts });
+      if (!imagePath) delete it.imagePath;
+      lastCur = it.currency;
+      if (it.bought && it.expenseId) {                                // 已購買：同步更新對應的花費
+        const ex = (currentTripData.expenses || []).find(x => x.id === it.expenseId), a = resolveAcct(it);
+        if (ex && a) Object.assign(ex, expenseFields(it, a));
+      }
+      $('shop-modal').classList.add('hidden');
+      const pend = window.__pendingBuy; window.__pendingBuy = null;
+      shopPending = null; shopDropOld = false;
+      if (toRemove.length) removeFromStorage(toRemove);
+      if (pend === it.id && !it.bought && resolveAcct(it)) { saveTripToCloud(); setBought(it.id, true); return; }
+      saveTripToCloud(); showToast('已儲存購物項目', 'success');
+    } finally { submit.disabled = false; submit.textContent = label; }
   }
 
   // 與既有流程接上：資料更新時重畫、進入購物頁時重畫
@@ -3733,7 +3812,141 @@
   window.renderTripData = function () { _rtd20(); renderShopping(); };
   const _g20 = window.goToPage;
   window.goToPage = function (p) { const r = _g20(p); if (p === 5) renderShopping(); return r; };
-  renderShopping();
+
+  /* ============ 21. 圖片放大檢視：點縮圖全螢幕顯示；點圖片切換放大；點背景、✕ 或 ESC 關閉 ============ */
+  function openLightbox(src, caption) {
+    closeLightbox();
+    const o = document.createElement('div');
+    o.id = 'lightbox'; o.style.cssText = 'position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.92);display:flex;flex-direction:column;';
+    o.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));color:#fff;font-size:13px;">
+        <span id="lb-cap" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <button type="button" id="lb-close" aria-label="關閉" style="color:#fff;font-size:22px;line-height:1;padding:4px 8px;">✕</button></div>
+      <div id="lb-scroll" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;">
+        <img id="lb-img" alt="" style="max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;"></div>
+      <div style="color:#aaa;font-size:11px;text-align:center;padding:6px;padding-bottom:max(6px,env(safe-area-inset-bottom));">點圖片可放大／縮小，點空白處或 ✕ 關閉</div>`;
+    document.body.appendChild(o);
+    $('lb-cap').textContent = caption || ''; $('lb-img').src = src;
+    let zoomed = false;
+    $('lb-img').onclick = e => {
+      e.stopPropagation(); zoomed = !zoomed; const im = $('lb-img'), sc = $('lb-scroll');
+      if (zoomed) { im.style.maxWidth = 'none'; im.style.maxHeight = 'none'; im.style.width = '250%'; im.style.cursor = 'zoom-out'; sc.style.alignItems = 'flex-start'; sc.style.justifyContent = 'flex-start'; }
+      else { im.style.maxWidth = '100%'; im.style.maxHeight = '100%'; im.style.width = ''; im.style.cursor = 'zoom-in'; sc.style.alignItems = 'center'; sc.style.justifyContent = 'center'; }
+    };
+    o.onclick = e => { if (e.target === o || e.target.id === 'lb-scroll' || e.target.id === 'lb-close') closeLightbox(); };
+  }
+  function closeLightbox() { const o = $('lightbox'); if (o) o.remove(); }
+  window.openLightbox = openLightbox; window.closeLightbox = closeLightbox;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  /* ============ 22. 購物照片存 Supabase Storage（私有儲存桶 trip-images，專案資料只記檔案路徑） ============ */
+  const BUCKET = 'trip-images';
+  const storageReady = () => !!(supabaseClient && currentUser && supabaseClient.storage);
+  const urlCache = {};                                              // path → { url, exp }（簽名網址 1 小時有效，本機快取 50 分鐘）
+  const cacheOk = p => urlCache[p] && urlCache[p].exp > Date.now();
+  const extOf = t => ({ 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }[t] || 'jpg');
+
+  function shopThumb(it) {
+    const src = it.imagePath ? (cacheOk(it.imagePath) ? urlCache[it.imagePath].url : '') : (it.image || '');
+    return src ? `<img src="${esc(src)}" class="w-full h-full object-cover" alt="" onerror="this.style.display='none'">` : '🛍️';
+  }
+  async function signedUrls(paths) {
+    const need = [...new Set(paths.filter(p => p && !cacheOk(p)))];
+    if (!need.length || !storageReady()) return;
+    try {
+      const { data, error } = await supabaseClient.storage.from(BUCKET).createSignedUrls(need, 3600);
+      if (error) throw error;
+      (data || []).forEach(d => { urlCache[d.path] = d.signedUrl && !d.error ? { url: d.signedUrl, exp: Date.now() + 50 * 60e3 } : { url: '', exp: Date.now() + 60e3 }; });
+    } catch (e) { console.error(e); need.forEach(p => { urlCache[p] = { url: '', exp: Date.now() + 60e3 }; }); }   // 失敗也記一筆，避免無限重試
+  }
+  async function signedUrlFor(path) { await signedUrls([path]); return urlCache[path] ? urlCache[path].url : ''; }
+  async function hydrateShopImages() {
+    const paths = shopList().filter(i => i.imagePath).map(i => i.imagePath);
+    if (!paths.some(p => !cacheOk(p)) || !storageReady()) return;
+    await signedUrls(paths);
+    document.querySelectorAll('#shop-list [data-path]').forEach(el => {
+      const c = urlCache[el.dataset.path]; if (c && c.url && !el.querySelector('img')) el.innerHTML = `<img src="${esc(c.url)}" class="w-full h-full object-cover" alt="" onerror="this.style.display='none'">`;
+    });
+  }
+  async function openShopImage(id) {
+    const it = shopList().find(x => x.id === id); if (!it) return;
+    const src = it.imagePath ? await signedUrlFor(it.imagePath) : it.image;
+    if (!src) { showToast('無法載入圖片（請確認已登入且有權限）', 'error'); return; }
+    openLightbox(src, `${it.name}　${fmtMoney(Number(it.amount) || 0, it.currency)}`);
+  }
+  // 上傳前先確保這個專案已存在於雲端（儲存桶權限依專案成員判斷）
+  async function ensureTripInCloud() {
+    if (currentTripId === 'default_trip') await saveTripToCloud();
+    return await pushTrip(currentTripId, currentTripData);
+  }
+  async function uploadToStorage(blob) {
+    if (!(await ensureTripInCloud())) throw new Error('專案尚未同步到雲端');
+    const path = `${currentTripId}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${extOf(blob.type)}`;
+    const { error } = await supabaseClient.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/jpeg', cacheControl: '3600', upsert: false });
+    if (error) throw error;
+    return path;
+  }
+  async function removeFromStorage(paths) {
+    paths = (paths || []).filter(Boolean);
+    paths.forEach(p => delete urlCache[p]);
+    if (!paths.length || !storageReady()) return;
+    try { await supabaseClient.storage.from(BUCKET).remove(paths); } catch (e) { console.error(e); }
+  }
+
+  // 把先前存在本機（base64）的照片一鍵搬到雲端
+  function updateMigrateBanner() {
+    let b = $('shop-migrate');
+    if (!b) { const sum = $('shop-summary'); if (!sum) return; b = document.createElement('div'); b.id = 'shop-migrate'; b.className = 'hidden bg-sky-50 border border-sky-200 rounded-xl p-2.5 text-[11px] flex items-center justify-between gap-2'; sum.parentNode.insertBefore(b, sum.nextSibling); }
+    const local = shopList().filter(i => i.image && /^data:/.test(i.image));
+    const show = local.length > 0 && storageReady();
+    b.classList.toggle('hidden', !show);
+    if (!show) { b.innerHTML = ''; return; }
+    b.innerHTML = `<span class="text-sky-900">有 <b>${local.length}</b> 張照片存在這台裝置，佔用瀏覽器空間，也不會同步給共編者。</span>`;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'flex-shrink-0 bg-sky-600 text-white font-bold px-2.5 py-1 rounded-lg'; btn.textContent = '移到雲端';
+    btn.onclick = migrateShopImages; b.appendChild(btn);
+  }
+  let migrating = false;
+  async function migrateShopImages() {
+    if (migrating || !storageReady()) return; migrating = true;
+    const local = shopList().filter(i => i.image && /^data:/.test(i.image)); let ok = 0, fail = 0;
+    try {
+      for (const it of local) {
+        try { const blob = await (await fetch(it.image)).blob(); it.imagePath = await uploadToStorage(blob); delete it.image; ok++; showToast(`搬移中… ${ok}/${local.length}`, 'info'); }
+        catch (e) { fail++; console.error(e); }
+      }
+    } finally { migrating = false; }
+    saveTripToCloud();
+    showToast(fail ? `已搬移 ${ok} 張，${fail} 張失敗（請確認已建立 trip-images 儲存桶與權限）` : `已將 ${ok} 張照片搬到雲端`, fail ? 'error' : 'success');
+  }
+  window.migrateShopImages = migrateShopImages;
+
+  // 刪除專案時，一併清除該專案資料夾（trip-images/專案ID/）下的所有照片，包含已無法從專案資料找到的孤兒檔案
+  async function purgeTripImages(tripId) {
+    if (!storageReady()) return { ok: true, removed: 0 };
+    let removed = 0, lastSig = '';
+    try {
+      for (let guard = 0; guard < 100; guard++) {
+        const { data, error } = await supabaseClient.storage.from(BUCKET).list(tripId, { limit: 100, offset: 0 });
+        if (error) throw error;
+        const names = (data || []).map(o => o && o.name).filter(Boolean);
+        if (!names.length) break;
+        const sig = names.join('|');
+        if (sig === lastSig) throw new Error('無法刪除照片（權限不足）');      // 與上一輪相同＝刪不掉，避免無限迴圈
+        lastSig = sig;
+        const paths = names.map(n => `${tripId}/${n}`);
+        const { data: gone, error: rerr } = await supabaseClient.storage.from(BUCKET).remove(paths);
+        if (rerr) throw rerr;
+        if (!gone || !gone.length) throw new Error('無法刪除照片（權限不足）');
+        paths.forEach(p => delete urlCache[p]); removed += gone.length;
+      }
+      return { ok: true, removed };
+    } catch (e) {
+      const m = String((e && (e.message || e.error)) || e);
+      if (/bucket not found|not found|404/i.test(m) && !removed) return { ok: true, removed: 0 };   // 還沒建立儲存桶＝沒有照片需要清
+      console.error(e); return { ok: false, error: m, removed };
+    }
+  }
+  window.purgeTripImages = purgeTripImages;
+  renderShopping();                                              // 放在最後：此時第 22 節的常數都已初始化
 })();
 </script>
 

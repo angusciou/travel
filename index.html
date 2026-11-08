@@ -2254,6 +2254,7 @@
 
     <!-- ===== 修補包（結算完整債務關係與 bug 修正）===== -->
 <style>input,textarea,select{user-select:text;-webkit-user-select:text}
+#toast-container{z-index:80 !important}   /* 動態建立的視窗（購物、同步）在 DOM 後面，提示訊息要確保蓋在所有視窗之上 */
 #page-home.home-custom h2,#page-home.home-custom .text-center p,#page-home.home-custom .pt-4 button{text-shadow:0 1px 6px rgba(0,0,0,.75),0 0 2px rgba(0,0,0,.55)}</style>
 <script>
 (function () {
@@ -3691,7 +3692,7 @@
           <div><label class="block font-bold text-slate-700 mb-1">金額 <span class="font-normal text-slate-400">(預設 = 單價 × 數量，可手動修改)</span></label><input id="shop-amount" type="number" step="any" min="0" class="${inp}"></div>
           <div class="grid grid-cols-2 gap-2">
             <div><label class="block font-bold text-slate-700 mb-1">購買地點</label><input id="shop-place" maxlength="60" placeholder="例: 京都車站" class="${inp}"></div>
-            <div><label class="block font-bold text-slate-700 mb-1">預計購買日期</label><input id="shop-date" type="date" class="${inp}"></div>
+            <div><label class="block font-bold text-slate-700 mb-1">購買日期</label><input id="shop-date" type="date" class="${inp}"></div>
           </div>
           <div class="space-y-1.5">
             <label class="block font-bold text-slate-700">圖片</label>
@@ -3946,6 +3947,18 @@
     }
   }
   window.purgeTripImages = purgeTripImages;
+
+  /* ============ 23. 外部元件（試算表等）沒載入時的保護：提示而不是丟出錯誤 ============ */
+  const _tpl23 = window.downloadExcelTemplate;
+  window.downloadExcelTemplate = function () {
+    if (typeof XLSX === 'undefined') { showToast('Excel 元件尚未載入，請確認網路連線後重新整理頁面', 'error'); return; }
+    return _tpl23.apply(this, arguments);
+  };
+  const _xl23 = window.handleExcelFileUpload;
+  window.handleExcelFileUpload = function (e) {
+    if (typeof XLSX === 'undefined') { showToast('Excel 元件尚未載入，請確認網路連線後重新整理頁面', 'error'); if (e && e.target) e.target.value = ''; return; }
+    return _xl23.apply(this, arguments);
+  };
   renderShopping();                                              // 放在最後：此時第 22 節的常數都已初始化
 })();
 </script>

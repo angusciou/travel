@@ -324,12 +324,8 @@
                 <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     <div class="flex justify-between items-center">
                         <h4 class="text-xs font-bold text-slate-700">分類支出佔比</h4>
-                        <div class="flex gap-1">
-                            <button onclick="setChartType('pie')" id="btn-chart-pie" class="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold">圓餅圖</button>
-                            <button onclick="setChartType('doughnut')" id="btn-chart-doughnut" class="text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">環形圖</button>
-                        </div>
                     </div>
-                    <div class="relative h-48 w-full flex items-center justify-center">
+                    <div class="relative h-64 w-full flex items-center justify-center">
                         <canvas id="expense-pie-chart"></canvas>
                     </div>
                     <div id="expense-bar-chart" class="space-y-1.5 text-[11px] pt-2"></div>
@@ -494,7 +490,8 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block font-bold text-slate-700 mb-1">目的地</label><input type="text" id="input-trip-destination" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="input-trip-budget" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="input-trip-budget" required class="w-full border border-slate-200 rounded p-1.5 outline-none disabled:bg-slate-100">
+                        <label class="flex items-center gap-1 mt-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" id="input-trip-nobudget" class="w-3.5 h-3.5 accent-amber-600">無預算</label></div>
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="input-trip-members" min="1" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 
@@ -659,7 +656,8 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block font-bold text-slate-700 mb-1">目的地</label><input type="text" id="new-trip-destination" required placeholder="日本 東京" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
-                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="new-trip-budget" required placeholder="50000" class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
+                    <div><label class="block font-bold text-slate-700 mb-1">預算 (TWD)</label><input type="number" id="new-trip-budget" required placeholder="50000" class="w-full border border-slate-200 rounded p-1.5 outline-none disabled:bg-slate-100">
+                        <label class="flex items-center gap-1 mt-1 text-[11px] text-slate-600 cursor-pointer"><input type="checkbox" id="new-trip-nobudget" class="w-3.5 h-3.5 accent-amber-600">無預算</label></div>
                 </div>
                 <div><label class="block font-bold text-slate-700 mb-1">同行人數</label><input type="number" id="new-trip-members" min="1" value="2" required class="w-full border border-slate-200 rounded p-1.5 outline-none"></div>
                 <div>
@@ -793,7 +791,6 @@
         let parsedExcelEvents = [];
         let leafletMap = null;
         let mapMarkersLayer = null;
-        let chartType = 'pie';
         let expenseChartInstance = null;
 
         const PRESET_CATEGORIES = {
@@ -1648,15 +1645,6 @@
             saveTripToCloud();
         };
 
-        window.setChartType = function(type) {
-            chartType = type;
-            const btnPie = document.getElementById('btn-chart-pie');
-            const btnDoughnut = document.getElementById('btn-chart-doughnut');
-            if (btnPie) btnPie.className = type === 'pie' ? 'text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold' : 'text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold';
-            if (btnDoughnut) btnDoughnut.className = type === 'doughnut' ? 'text-[9px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold' : 'text-[9px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold';
-            renderExpenses();
-        };
-
         function renderExpensePieChart(expenses, total) {
             const canvas = document.getElementById('expense-pie-chart');
             const barContainer = document.getElementById('expense-bar-chart');
@@ -1685,18 +1673,21 @@
 
             try {
                 expenseChartInstance = new Chart(canvas, {
-                    type: chartType,
+                    type: 'pie',
                     data: {
                         labels: labels,
                         datasets: [{
                             data: dataVals,
-                            backgroundColor: colors.slice(0, labels.length),
-                            borderWidth: 1
+                            backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                            borderColor: '#ffffff',
+                            borderWidth: 2
                         }]
                     },
+                    plugins: window.pieLeaderLines ? [window.pieLeaderLines] : [],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { left: 92, right: 92, top: 16, bottom: 16 } },      // 兩側留白放引出線標籤
                         plugins: { legend: { display: false } }
                     }
                 });
@@ -1704,7 +1695,7 @@
 
             labels.forEach((label, i) => {
                 const amt = catTotals[label];
-                const pct = Math.round((amt / total) * 100);
+                const pct = Math.max(Math.round((amt / total) * 100), amt > 0 ? 1 : 0), pctText = Math.round((amt / total) * 100) === 0 && amt > 0 ? '<1' : pct;
                 const color = colors[i % colors.length];
 
                 const row = document.createElement('div');
@@ -1712,7 +1703,7 @@
                 row.innerHTML = `
                     <div class="flex justify-between text-[11px] font-bold text-slate-700">
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${color}"></span>${esc(label)}</span>
-                        <span>${window.__dispSym || 'NT$ '}${(Math.round(amt * 100) / 100).toLocaleString()} (${pct}%)</span>
+                        <span>${window.__dispSym || 'NT$ '}${(Math.round(amt * 100) / 100).toLocaleString()} (${pctText}%)</span>
                     </div>
                     <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div class="h-full rounded-full transition-all duration-300" style="width: ${pct}%; background:${color}"></div>
@@ -1859,7 +1850,8 @@
             currentTripData.startDate = document.getElementById('input-trip-start').value;
             currentTripData.endDate = document.getElementById('input-trip-end').value;
             currentTripData.destination = document.getElementById('input-trip-destination').value;
-            currentTripData.budget = Number(document.getElementById('input-trip-budget').value);
+            currentTripData.noBudget = document.getElementById('input-trip-nobudget').checked;
+            currentTripData.budget = currentTripData.noBudget ? 0 : Number(document.getElementById('input-trip-budget').value);
             currentTripData.members = Number(document.getElementById('input-trip-members').value);
             
             const collabInput = document.getElementById('input-trip-collaborators').value;
@@ -1881,7 +1873,8 @@
             const start = document.getElementById('new-trip-start').value;
             const end = document.getElementById('new-trip-end').value;
             const dest = document.getElementById('new-trip-destination').value;
-            const budget = Number(document.getElementById('new-trip-budget').value);
+            const noBudget = document.getElementById('new-trip-nobudget').checked;
+            const budget = noBudget ? 0 : Number(document.getElementById('new-trip-budget').value);
             const mem = Number(document.getElementById('new-trip-members').value);
             let cp = document.getElementById('new-trip-cover-base64').value || document.getElementById('new-trip-cover').value || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80';
             const notes = document.getElementById('new-trip-notes').value;
@@ -1889,7 +1882,7 @@
             const newId = 'trip_' + Math.random().toString(36).substr(2, 8);
             currentTripId = newId;
             currentTripData = {
-                id: newId, title, startDate: start, endDate: end, destination: dest, budget, members: mem,
+                id: newId, title, startDate: start, endDate: end, destination: dest, budget, noBudget, members: mem,
                 collaborators: [], settlementsPaid: {},
                 coverPhoto: cp, notes, itinerary: [], expenses: [],
                 checklist: [{ id: 'c1', text: '護照與證件', done: false }]
@@ -2574,6 +2567,68 @@
   /* ============ 3. 儲存／讀取：預設專案 ID 衝突、同步失敗誤報、共編者覆蓋擁有者 ============ */
   const CAT_FIX = { sightseeing: 'tickets' };
   /* 同步邏輯：先更新畫面再同步雲端；同步失敗的資料標記為「未同步」，不會被雲端舊資料蓋掉 */
+  /* ---- 同步：存檔前先讀雲端最新版本，用「三方合併」把雙方的變更合在一起，不再整份覆蓋（base＝上次與雲端一致的版本）---- */
+  const bases = {}, lastUpd = {};
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const stable = v => JSON.stringify(v, (k, x) => isObj(x) ? Object.keys(x).sort().reduce((a, key) => (a[key] = x[key], a), {}) : x);
+  const same = (a, b) => stable(a) === stable(b);
+  function merge3(b, l, r) {
+    if (same(l, r)) return l;
+    if (same(l, b)) return r;                                    // 只有對方改過 → 採用對方
+    if (same(r, b)) return l;                                    // 只有我方改過 → 採用我方
+    if (isObj(l) && isObj(r)) {                                  // 物件：逐欄位合併
+      const bb = isObj(b) ? b : {}, out = {};
+      new Set([...Object.keys(bb), ...Object.keys(l), ...Object.keys(r)]).forEach(k => {
+        const hasL = k in l, hasR = k in r, hasB = k in bb; let v;
+        if (hasL && hasR) v = merge3(bb[k], l[k], r[k]);
+        else if (hasL) v = (hasB && same(l[k], bb[k])) ? undefined : l[k];   // 對方刪除：我方沒改就刪、有改就保留
+        else if (hasR) v = (hasB && same(r[k], bb[k])) ? undefined : r[k];
+        if (v !== undefined) out[k] = v;
+      });
+      return out;
+    }
+    if (Array.isArray(l) && Array.isArray(r)) {
+      const bb = Array.isArray(b) ? b : [];
+      if ([...l, ...r, ...bb].every(x => isObj(x) && x.id !== undefined)) {   // 有 id 的清單（行程、花費、購物、行李）：依 id 合併
+        const mb = new Map(bb.map(x => [x.id, x])), ml = new Map(l.map(x => [x.id, x])), mr = new Map(r.map(x => [x.id, x]));
+        const ids = [...r.map(x => x.id), ...l.map(x => x.id).filter(id => !mr.has(id))], out = [];
+        ids.forEach(id => {
+          const x = mb.get(id), a = ml.get(id), c = mr.get(id); let v;
+          if (a && c) v = merge3(x, a, c);
+          else if (a) v = (x && same(a, x)) ? undefined : a;                  // 對方已刪除：我方沒改就刪
+          else v = (x && same(c, x)) ? undefined : c;                         // 我方已刪除：對方沒改就刪、有改就保留
+          if (v !== undefined) out.push(v);
+        });
+        return out;
+      }
+      const B = new Set(bb.map(stable)), L = new Set(l.map(stable)), R = new Set(r.map(stable)), res = [], seen = new Set();   // 單純值的清單：集合合併
+      [...l, ...r].forEach(x => { const k = stable(x); if (seen.has(k)) return; seen.add(k);
+        if ((L.has(k) && R.has(k)) || !B.has(k)) res.push(x); });
+      return res;
+    }
+    return l;                                                    // 同一個欄位兩邊都改成不同值：以本機（正在存檔的人）為準
+  }
+  window.__merge3 = merge3;
+  const replaceInPlace = (target, src) => { Object.keys(target).forEach(k => delete target[k]); Object.assign(target, src); };
+
+  function normalizeTripLinks(t) {
+    (t.expenses || []).forEach(e => { if (CAT_FIX[e.category]) e.category = CAT_FIX[e.category]; });
+    // 行程與花費的連動：以花費為準同步名稱／金額；花費已刪除則解除連動
+    (t.itinerary || []).forEach(it => {
+      if (!it.linkedExpenseId) return;
+      const ex = (t.expenses || []).find(x => x.id === it.linkedExpenseId);
+      if (ex) { it.cost = Number(ex.amount); it.costCurrency = curOf(ex.currency); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
+    });
+    (t.shopping || []).forEach(sh => {                           // 購物計劃 ↔ 花費：花費被刪除則還原為未購買；金額／幣別以花費為準
+      if (!sh.expenseId) return;
+      const ex = (t.expenses || []).find(x => x.id === sh.expenseId);
+      if (!ex) { sh.bought = false; sh.expenseId = null; return; }
+      sh.amount = Number(ex.amount); sh.currency = curOf(ex.currency);
+    });
+    if (currentUser && (!t.ownerId || t.ownerId === currentUser.id) && !t.ownerEmail) t.ownerEmail = myEmail();   // 記下建立者帳號（只用來顯示建立者暱稱）
+  }
+
   let pushChain = Promise.resolve();
   function pushTrip(id, trip) {                       // 依序送出，每次送出當下才序列化最新內容
     const run = () => doPush(id, trip);
@@ -2587,8 +2642,29 @@
     try {
       const owner = trip.ownerId || uid;
       trip.ownerId = owner;
+      // 1) 讀雲端最新版本；若別人在我們上次同步後改過，先合併再寫入（不會把別人的變更蓋掉）
+      let remote = null;
+      try {
+        const r = await supabaseClient.from('trips').select('data,user_id,updated_at').eq('id', id).maybeSingle();
+        if (!r.error) remote = r.data || null;
+      } catch (e) { remote = null; }
+      let merged = false;
+      if (remote && remote.data) {
+        const rd = clone(remote.data); rd.ownerId = remote.user_id;
+        if (!same(rd, bases[id])) {
+          const m = merge3(bases[id] || {}, trip, rd);
+          if (!same(m, trip)) { replaceInPlace(trip, m); merged = true; }
+          trip.ownerId = remote.user_id;
+        }
+        normalizeTripLinks(trip);
+      }
       const now = new Date().toISOString();
-      if (owner === uid) {
+      // 2) 寫入
+      if (remote) {
+        const { data, error } = await supabaseClient.from('trips').update({ title: trip.title, data: trip, updated_at: now }).eq('id', id).select('id');
+        if (error) throw error;
+        if (!data || !data.length) { const r = new Error('revoked'); r.revoked = true; throw r; }
+      } else if (owner === uid) {
         const { error } = await supabaseClient.from('trips').upsert({ id, user_id: owner, title: trip.title, data: trip, updated_at: now });
         if (error) throw error;
       } else {                                                    // 共編者：只能更新，不能新增或改擁有者
@@ -2596,7 +2672,12 @@
         if (error) throw error;
         if (!data || !data.length) { const r = new Error('revoked'); r.revoked = true; throw r; }
       }
+      bases[id] = clone(trip); lastUpd[id] = now;
       localStorage.removeItem(ns + 'unsynced_' + id);
+      if (merged) {                                               // 合併到了別人的變更：更新本機副本與畫面
+        try { localStorage.setItem(ns + 'local_trip_' + id, JSON.stringify(trip)); } catch (e) {}
+        if (currentTripData === trip && currentTripId === id) { renderTripData(); fetchConfirmations(false); }
+      }
       return true;
     } catch (e) {
       console.error(e);
@@ -2611,21 +2692,36 @@
     }
   }
 
+  // 主動拉取目前專案的最新版本：自己沒有未同步的變更 → 直接採用；有 → 合併後再推送
+  async function pullCurrentTrip(manual) {
+    if (!(supabaseClient && currentUser) || currentTripId === 'default_trip') return;
+    const id = currentTripId, trip = currentTripData;
+    try {
+      if (!manual && lastUpd[id]) {                              // 先只問更新時間，沒變就不下載整份
+        const q = await supabaseClient.from('trips').select('updated_at').eq('id', id).maybeSingle();
+        if (!q.error && q.data && q.data.updated_at === lastUpd[id]) return;
+      }
+      const { data, error } = await supabaseClient.from('trips').select('data,user_id,updated_at').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (id !== currentTripId || trip !== currentTripData) return;
+      if (!data) {                                               // 雲端看不到了：可能已被移出共編名單
+        if (bases[id] && !store.get('unsynced_' + id)) { store.remove('local_trip_' + id); showToast('你已不在此專案的共編名單', 'error'); currentTripId = 'default_trip'; currentTripData = getInitialTripData(); await goHomeLanding(); }
+        return;
+      }
+      const rd = clone(data.data); rd.ownerId = data.user_id;
+      lastUpd[id] = data.updated_at;
+      if (same(rd, bases[id])) { if (manual) showToast('已是最新資料', 'info'); return; }
+      const dirty = !!store.get('unsynced_' + id) || (bases[id] && !same(trip, bases[id]));
+      if (dirty) { const m = merge3(bases[id] || {}, trip, rd); replaceInPlace(trip, m); trip.ownerId = data.user_id; normalizeTripLinks(trip); bases[id] = rd; store.set('local_trip_' + id, JSON.stringify(trip)); renderTripData(); saveTripToCloud(); }
+      else { replaceInPlace(trip, rd); bases[id] = clone(rd); store.set('local_trip_' + id, JSON.stringify(trip)); renderTripData(); fetchConfirmations(true); }
+      if (manual) showToast('已更新為最新資料', 'success');
+    } catch (e) { console.error(e); if (manual) showToast('同步失敗：' + (e.message || ''), 'error'); }
+  }
+  window.pullCurrentTrip = pullCurrentTrip;
+
   window.saveTripToCloud = async function () {
     window.__tripDenied = false;
-    (currentTripData.expenses || []).forEach(e => { if (CAT_FIX[e.category]) e.category = CAT_FIX[e.category]; });
-    // 行程與花費的連動：以花費為準同步名稱／金額；花費已刪除則解除連動
-    (currentTripData.itinerary || []).forEach(it => {
-      if (!it.linkedExpenseId) return;
-      const ex = (currentTripData.expenses || []).find(x => x.id === it.linkedExpenseId);
-      if (ex) { it.cost = Number(ex.amount); it.costCurrency = curOf(ex.currency); it.title = ex.title; delete it.syncDismissed; } else delete it.linkedExpenseId;
-    });
-    (currentTripData.shopping || []).forEach(sh => {                // 購物計劃 ↔ 花費：花費被刪除則還原為未購買；金額／幣別以花費為準
-      if (!sh.expenseId) return;
-      const ex = (currentTripData.expenses || []).find(x => x.id === sh.expenseId);
-      if (!ex) { sh.bought = false; sh.expenseId = null; return; }
-      sh.amount = Number(ex.amount); sh.currency = curOf(ex.currency);
-    });
+    normalizeTripLinks(currentTripData);
     if (currentTripId === 'default_trip') {                      // 所有人共用同一個 ID 會互相覆蓋
       store.remove('local_trip_default_trip');
       currentTripId = 'trip_' + Math.random().toString(36).slice(2, 10);
@@ -2645,9 +2741,9 @@
   };
 
   let lastFetchAt = 0, lastFetchUser = null;
-  window.fetchAllCloudTrips = async function () {
+  window.fetchAllCloudTrips = async function (force) {
     if (!(supabaseClient && currentUser)) return;
-    if (lastFetchUser === currentUser.id && Date.now() - lastFetchAt < 2000) return;
+    if (!force && lastFetchUser === currentUser.id && Date.now() - lastFetchAt < 2000) return;
     lastFetchAt = Date.now(); lastFetchUser = currentUser.id;
     try {
       const { data, error } = await supabaseClient.from('trips').select('*');
@@ -2676,11 +2772,12 @@
     let answered = false;
     try {
       if (supabaseClient && currentUser && !(local && store.get('unsynced_' + tId))) {
-        const { data, error } = await supabaseClient.from('trips').select('data,user_id').eq('id', tId).maybeSingle();
+        const { data, error } = await supabaseClient.from('trips').select('data,user_id,updated_at').eq('id', tId).maybeSingle();
         if (!error) {
           answered = true;
           if (data && data.data && canSeeRow(data)) {
             currentTripData = data.data; currentTripData.ownerId = data.user_id;
+            bases[tId] = clone(currentTripData); lastUpd[tId] = data.updated_at;
             store.set('local_trip_' + tId, JSON.stringify(currentTripData));
             window.__tripDenied = false;
             renderTripData(); return true;
@@ -3567,15 +3664,8 @@
   const _openModal19 = window.openModal;
   window.openModal = function (id) { _openModal19(id); if (id === 'auth-modal' && $('my-nick')) $('my-nick').value = myNickRaw(); };
 
-  // 封面的「共編授權名單」不顯示 Email：有暱稱顯示暱稱，否則只顯示人數
-  function updateCoverCollab() {
-    const el = $('cover-collaborators'); if (!el) return;
-    const n = (currentTripData.collaborators || []).length; if (!n) return;
-    const named = (currentUser && enforcePerm()) ? tripMembers().filter(m => m.hasNick && m.email !== normEmail(currentTripData.ownerEmail)).map(m => m.name) : [];
-    el.textContent = named.length ? `${n} 位共編成員：${named.join('、')}${named.length < n ? ' 等' : ''}` : `${n} 位共編成員`;
-  }
   const _rtd19 = window.renderTripData;
-  window.renderTripData = function () { _rtd19(); updateCoverCollab(); syncMyNickname(); };
+  window.renderTripData = function () { _rtd19(); window.updateCoverCollab && window.updateCoverCollab(); syncMyNickname(); };
 
   // 登入後若還沒設定暱稱，提醒並開啟帳號視窗
   const _login19 = window.handleUserLogin;
@@ -4031,6 +4121,130 @@
     $('buy-modal').classList.add('hidden');
     saveTripToCloud(); showToast(`已購買，並加入花費：${fmtMoney(amount, cur)}`, 'success');
   }
+
+
+  /* ============ 25. 圓餅圖引出線標籤：每個扇形拉一條線到外側，標示項目名稱與百分比；同側標籤自動錯開避免重疊 ============ */
+  window.pieLeaderLines = {
+    id: 'pieLeaderLines',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0); if (!meta || !meta.data) return;
+      const ds = chart.data.datasets[0], data = ds.data.map(Number), total = data.reduce((a, b) => a + b, 0) || 1, ctx = chart.ctx;
+      const GAP = 28, items = [];
+      meta.data.forEach((arc, i) => {
+        if (!(data[i] > 0)) return;
+        const mid = (arc.startAngle + arc.endAngle) / 2, c = Math.cos(mid), sn = Math.sin(mid), r = arc.outerRadius;
+        items.push({ i, side: c >= 0 ? 1 : -1, x0: arc.x + c * r, y0: arc.y + sn * r, x1: arc.x + c * (r + 12), y1: arc.y + sn * (r + 12), cx: arc.x, r,
+          color: Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor, label: String(chart.data.labels[i]).replace(/^[\p{Extended_Pictographic}\uFE0F\u200d\s]+/u, '').trim() || String(chart.data.labels[i]), pctText: (() => { const p = Math.round(data[i] / total * 100); return (p === 0 ? '<1' : p) + '%'; })() });
+      });
+      [-1, 1].forEach(side => {                                     // 每一側由上到下排序，間距不足就往下推；超出底部再整體往上移
+        const arr = items.filter(it => it.side === side).sort((a, b) => a.y1 - b.y1); let last = -1e9;
+        arr.forEach(it => { it.ly = Math.max(it.y1, last + GAP); last = it.ly; });
+        const over = arr.length ? arr[arr.length - 1].ly - (chart.height - 14) : 0;
+        if (over > 0) { arr.forEach(it => { it.ly -= over; }); let prev = 1e9; for (let k = arr.length - 1; k >= 0; k--) { arr[k].ly = Math.min(arr[k].ly, prev - GAP); prev = arr[k].ly; } }
+        arr.forEach(it => { it.ly = Math.max(it.ly, 10); });
+      });
+      ctx.save(); ctx.lineWidth = 1.2; ctx.font = '600 10px "Noto Sans TC", sans-serif'; ctx.textBaseline = 'middle';
+      items.forEach(it => {
+        const xe = it.cx + it.side * (it.r + 22);                    // 轉折點的 x（垂直於圓心的固定欄位）
+        ctx.strokeStyle = it.color; ctx.beginPath(); ctx.moveTo(it.x0, it.y0); ctx.lineTo(it.x1, it.y1); ctx.lineTo(xe, it.ly); ctx.stroke();
+        ctx.beginPath(); ctx.arc(it.x0, it.y0, 1.8, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill();   // 扇形上的小圓點
+        ctx.textAlign = it.side > 0 ? 'left' : 'right'; const tx = xe + it.side * 4;
+        const maxW = (it.side > 0 ? chart.width - tx : tx) - 4; let text = it.label;      // 名稱太長時截短並加「…」，避免被畫布邊緣切掉
+        while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
+        if (text !== it.label) text = text.slice(0, -1) + '…';
+        ctx.fillStyle = '#334155'; ctx.fillText(text, tx, it.ly - 6);
+        ctx.fillStyle = '#64748b'; ctx.font = '400 10px "Noto Sans TC", sans-serif'; ctx.fillText(it.pctText, tx, it.ly + 7); ctx.font = '600 10px "Noto Sans TC", sans-serif';
+      });
+      ctx.restore();
+    }
+  };
+
+
+  /* ============ 26. 自動同步、建立者標示、共編名單只有建立者可改、無預算 ============ */
+  // --- 自動同步：定時、回到頁面、手動按鈕。首頁刷新專案清單（新加入的共編專案會自己出現），專案內拉取最新資料
+  async function syncTick(manual) {
+    if (!(supabaseClient && currentUser)) { if (manual) showToast('未登入：資料只存在這台裝置，登入後才會同步', 'info'); return; }
+    if (document.hidden && !manual) return;
+    if (!manual && document.querySelector('.fixed.inset-0:not(.hidden)')) return;            // 有視窗開著（正在輸入）就先不打擾
+    const home = $('page-home'), cat = $('page-category-list');
+    try {
+      if (home && !home.classList.contains('hidden')) { await fetchAllCloudTrips(true); await updateLandingCounts(); if (manual) showToast('已更新專案清單', 'success'); }
+      else if (cat && !cat.classList.contains('hidden')) { await fetchAllCloudTrips(true); await openLandingCategory(lastCategory); if (manual) showToast('已更新專案清單', 'success'); }
+      else { await pullCurrentTrip(manual); if (!$('page-3').classList.contains('hidden')) fetchConfirmations(false); }
+    } catch (e) { console.error(e); }
+  }
+  window.syncTick = syncTick;
+  setInterval(() => syncTick(false), 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncTick(false); });
+  window.addEventListener('focus', () => syncTick(false));
+  (function addSyncButton() {
+    const acct = document.querySelector('header button[onclick*="auth-modal"]'); if (!acct || $('sync-now')) return;
+    const b = document.createElement('button'); b.id = 'sync-now'; b.type = 'button'; b.title = '立即同步最新資料';
+    b.className = 'bg-slate-100 hover:bg-slate-200 text-slate-700 px-1.5 py-1 rounded-lg border border-slate-200'; b.textContent = '🔄';
+    b.onclick = async () => { b.disabled = true; try { await syncTick(true); } finally { b.disabled = false; } };
+    acct.parentNode.insertBefore(b, acct);
+  })();
+
+  // --- 建立者標示
+  function ownerName() {
+    const oe = normEmail(currentTripData.ownerEmail), mine = isTripOwner();
+    if (oe) { const m = tripMembers().find(x => x.email === oe); const n = m ? m.name : '建立者'; return mine ? n + '（你）' : n + (m && !m.hasNick ? '（尚未設定暱稱）' : ''); }
+    return (mine || !currentUser) ? '你' : '建立者';
+  }
+  function collabNames() {
+    const oe = normEmail(currentTripData.ownerEmail);
+    return tripMembers().filter(m => m.email !== oe).map(m => m.name + (m.hasNick ? '' : '（尚未設定暱稱）'));
+  }
+  function updateCoverCollab() {
+    const el = $('cover-collaborators'); if (!el) return;
+    const n = (currentTripData.collaborators || []).length;
+    el.classList.remove('truncate'); el.style.whiteSpace = 'pre-line';
+    const names = currentUser && n ? collabNames() : [];
+    el.textContent = `建立者：${ownerName()}\n` + (n ? `共編成員：${names.length ? names.join('、') : n + ' 位'}` : '尚未設定共編成員');
+  }
+  window.updateCoverCollab = updateCoverCollab;
+
+  // --- 編輯旅書資訊視窗：只有建立者能新增／移除共編成員；其他成員看到唯讀名單（不顯示 Email）
+  function tuneEditTripModal() {
+    const inp = $('input-trip-collaborators'); if (!inp) return;
+    const box = inp.parentNode; let ro = $('collab-ro'), note = $('collab-owner-note');
+    if (!note) { note = document.createElement('p'); note.id = 'collab-owner-note'; note.className = 'text-[11px] text-indigo-900 font-bold'; box.insertBefore(note, box.children[1] || null); }
+    if (!ro) { ro = document.createElement('div'); ro.id = 'collab-ro'; ro.className = 'text-[11px] text-indigo-800 bg-white border border-indigo-200 rounded p-1.5'; inp.parentNode.insertBefore(ro, inp.nextSibling); }
+    const n = (currentTripData.collaborators || []).length, readonly = !!currentUser && n > 0 && !isTripOwner();
+    note.textContent = `建立者：${ownerName()}`;
+    ro.style.display = readonly ? '' : 'none'; inp.style.display = readonly ? 'none' : '';
+    if (readonly) ro.innerHTML = `共編成員：${esc(collabNames().join('、') || '—')}<br><span class="text-slate-500">只有建立者可以新增或移除共編成員。</span>`;
+  }
+  const _openModal26 = window.openModal;
+  window.openModal = function (id) {
+    _openModal26(id);
+    if (id === 'edit-trip-modal') tuneEditTripModal();
+    if (id === 'edit-trip-modal' || id === 'new-project-modal') syncBudgetBox(id === 'edit-trip-modal' ? 'input' : 'new');
+  };
+  const _saveTrip26 = window.handleSaveTripDetails;
+  window.handleSaveTripDetails = function (e) {
+    if (currentUser && (currentTripData.collaborators || []).length && !isTripOwner()) $('input-trip-collaborators').value = (currentTripData.collaborators || []).join(', ');   // 非建立者：共編名單維持原狀
+    _saveTrip26(e);
+  };
+
+  // --- 無預算
+  function syncBudgetBox(prefix) {
+    const inp = $(prefix + '-trip-budget'), cb = $(prefix + '-trip-nobudget'); if (!inp || !cb) return;
+    if (prefix === 'input') cb.checked = !!currentTripData.noBudget; else cb.checked = false;
+    const apply = () => { inp.disabled = cb.checked; if (cb.checked) inp.value = ''; else if (prefix === 'input' && inp.value === '') inp.value = currentTripData.budget || ''; };
+    cb.onchange = apply; apply();
+  }
+  const _rtd26 = window.renderTripData;
+  window.renderTripData = function () { _rtd26(); if (currentTripData.noBudget) setElText('cover-budget', '無預算'); };
+  const _re26 = window.renderExpenses;
+  window.renderExpenses = function () {
+    _re26();
+    if (currentTripData.noBudget) { const el = $('remaining-budget-display'); if (el) el.textContent = '無預算'; }
+  };
+
+  // --- 「自行付款」時，整列「參與分攤成員」一起隱藏（原本只剩標題、沒有欄位）
+  const _applySelf26 = applySelf;
+  applySelf = function (modeId) { _applySelf26(modeId); const inp = $(SELF_MAP[modeId][0]); if (inp && inp.parentNode) inp.parentNode.style.display = $(modeId).value === 'self' ? 'none' : ''; };
 
   renderShopping();                                              // 放在最後：此時第 22 節的常數都已初始化
 })();

@@ -201,7 +201,7 @@
             <!-- 第 1 頁：封面與基本資料 -->
             <div id="page-1" class="space-y-3 page-panel hidden">
                 <div class="relative h-44 rounded-2xl overflow-hidden shadow-sm bg-slate-200 border border-slate-200">
-                    <img id="cover-photo" src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
+                    <img id="cover-photo" src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80" alt="Cover" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='https://placehold.co/800x400/d97706/ffffff?text=Travel+Book'">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3">
                         <div class="text-white">
                             <span class="text-[9px] uppercase tracking-widest bg-amber-500 font-bold px-1.5 py-0.5 rounded text-white">Travel Book</span>
@@ -1113,7 +1113,7 @@
                     div.className = 'bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between hover:border-amber-400 transition';
                     div.innerHTML = `
                         <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onclick="openTripById('${t.id}')">
-                            <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
+                            <img src="${t.coverPhoto || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80'}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.onerror=null;this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
                             <div class="min-w-0">
                                 <h4 class="font-bold text-slate-800 text-xs truncate">${collabTag}${t.title}</h4>
                                 <p class="text-[10px] text-slate-500 truncate">${t.startDate || ''} ~ ${t.endDate || ''} | ${t.destination || ''}</p>
@@ -1227,6 +1227,7 @@
                 if (coverImg) {
                     coverImg.src = currentTripData.coverPhoto || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80';
                     coverImg.onerror = function() {
+                        this.onerror = null;                                    // 只退回一次，避免備用圖也失敗時無限重試
                         this.src = 'https://placehold.co/800x400/d97706/ffffff?text=Travel+Book';
                     };
                 }
@@ -2861,7 +2862,7 @@
     box.innerHTML = trips.map(t => `
       <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between" data-id="${esc(t.id)}">
         <div class="flex items-center gap-3 min-w-0 cursor-pointer flex-1" data-act="open">
-          <img src="${esc(t.coverPhoto || DEFAULT_IMG)}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
+          <img src="${esc(t.coverPhoto || DEFAULT_IMG)}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.onerror=null;this.src='https://placehold.co/150x150/d97706/ffffff?text=Trip'">
           <div class="min-w-0"><h4 class="font-bold text-slate-800 text-xs truncate">${(t.collaborators || []).length ? '<span class="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-bold mr-1">共編</span>' : ''}${esc(t.title)}</h4>
           <p class="text-[10px] text-slate-500 truncate">${esc(t.startDate)} ~ ${esc(t.endDate)} | ${esc(t.destination)}</p></div></div>
         <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
@@ -4264,7 +4265,7 @@
         <h3 class="font-bold text-slate-900 text-sm pr-6">無法連線到雲端伺服器</h3>
         <p class="text-slate-600">「Failed to fetch」代表瀏覽器連不到伺服器，<b>不是帳號或密碼錯誤</b>（密碼錯誤會顯示「Invalid login credentials」）。</p>
         <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1"><p class="font-bold text-slate-700">連線測試</p>
-          <p id="nd-net"></p><p id="nd-host" class="break-all"></p><p id="nd-result" class="font-bold">測試中…</p></div>
+          <p id="nd-net"></p><p id="nd-host" class="break-all"></p><p id="nd-probes" class="whitespace-pre-line text-slate-600"></p><p id="nd-result" class="font-bold">測試中…</p></div>
         <div><p class="font-bold text-slate-700 mb-1">可能的原因與處理</p>
           <ol class="list-decimal list-inside space-y-1 text-slate-600">
             <li><b>專案被暫停（最常見）：</b>Supabase 免費專案閒置約 7 天會自動暫停。請登入 Supabase 後台，找到這個專案，按「Restore project」。恢復後網址可能還要幾分鐘才生效，請稍等再試。</li>
@@ -4282,20 +4283,28 @@
     const cfg = window.SUPABASE_CONFIG || {}, url = String(cfg.url || '').replace(/\/+$/, '');
     $('nd-net').textContent = navigator.onLine === false ? '網路狀態：目前沒有網路連線' : '網路狀態：瀏覽器顯示已連線';
     let host = url; try { host = new URL(url).host; } catch (e) {}
-    $('nd-host').textContent = '伺服器：' + (host || '（未設定）');
+    $('nd-host').textContent = '專案伺服器：' + (host || '（未設定）');
     const out = $('nd-result'); out.className = 'font-bold text-slate-600'; out.textContent = '測試中…';
     if (!url) { out.className = 'font-bold text-red-600'; out.textContent = '沒有設定專案網址'; return; }
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
-    try {
-      const r = await fetch(url + '/auth/v1/settings', { headers: { apikey: cfg.key || '' }, signal: ctl.signal });
-      clearTimeout(timer);
-      if (r.ok) { out.className = 'font-bold text-emerald-600'; out.textContent = `✓ 伺服器有回應（HTTP ${r.status}），連線正常。請再試一次登入。`; }
-      else if (r.status === 401 || r.status === 403) { out.className = 'font-bold text-amber-600'; out.textContent = `伺服器有回應，但金鑰被拒絕（HTTP ${r.status}），請檢查專案金鑰是否正確。`; }
-      else { out.className = 'font-bold text-amber-600'; out.textContent = `伺服器有回應但狀態異常（HTTP ${r.status}）。若專案剛恢復，請等幾分鐘再試。`; }
-    } catch (e) {
-      clearTimeout(timer); out.className = 'font-bold text-red-600';
-      out.textContent = e && e.name === 'AbortError' ? '✗ 連線逾時（8 秒沒有回應）：網路太慢，或專案正在恢復中。' : '✗ 連不到伺服器：無法解析網域或被擋掉。最常見是專案被暫停，請依下方第 1 點處理。';
+    // 對照測試：用「不看內容、只看連不連得上」的方式，分辨是整個網路、Supabase 網站、還是只有專案網址連不到
+    const probe = async (u, opt) => { const c = new AbortController(), t = setTimeout(() => c.abort(), 8000); try { const r = await fetch(u, { ...(opt || {}), signal: c.signal }); clearTimeout(t); return r; } catch (e) { clearTimeout(t); return e && e.name === 'AbortError' ? 'timeout' : null; } };
+    const [net, sbSite, proj] = await Promise.all([
+      probe('https://www.cloudflare.com/cdn-cgi/trace', { mode: 'no-cors', cache: 'no-store' }),
+      probe('https://supabase.com/', { mode: 'no-cors', cache: 'no-store' }),
+      probe(url + '/auth/v1/settings', { headers: { apikey: cfg.key || '' }, cache: 'no-store' })]);
+    const mark = r => r === 'timeout' ? '✗ 逾時' : r ? '✓ 連得上' : '✗ 連不上';
+    const lines = `一般網站（cloudflare.com）：${mark(net)}\nSupabase 官網（supabase.com）：${mark(sbSite)}\n你的專案（${host}）：${mark(proj && proj.status ? proj : proj)}`;
+    $('nd-probes') && ($('nd-probes').textContent = lines);
+    if (proj && proj.status) {                                                          // 專案有回應
+      if (proj.ok) { out.className = 'font-bold text-emerald-600'; out.textContent = `✓ 專案伺服器有回應（HTTP ${proj.status}），連線正常。請再試一次登入。`; }
+      else if (proj.status === 401 || proj.status === 403) { out.className = 'font-bold text-amber-600'; out.textContent = `專案伺服器有回應，但金鑰被拒絕（HTTP ${proj.status}），請檢查專案金鑰是否正確。`; }
+      else { out.className = 'font-bold text-amber-600'; out.textContent = `專案伺服器有回應但狀態異常（HTTP ${proj.status}）。若專案剛恢復，請等幾分鐘再試。`; }
+      return;
     }
+    out.className = 'font-bold text-red-600';
+    if (!net) out.textContent = '✗ 連不上一般網站：你的網路目前不通，請先檢查 Wi-Fi／網路線。';
+    else if (!sbSite) out.textContent = '✗ 一般網站正常，但連 Supabase 官網也連不上：整個 supabase 網域被擋住了（廣告／隱私外掛、防毒、DNS 過濾或網路業者）。請先用 InPrivate 視窗、換網路或改 DNS 測試。';
+    else out.textContent = proj === 'timeout' ? '✗ 只有你的專案網址逾時：專案可能正在恢復，或這個子網域在你的網路上解析不到。' : '✗ Supabase 官網連得上，但只有你的專案網址連不上：多半是你的網路（DNS）解析不到這個子網域，或專案被暫停。請先確認 Supabase 後台專案是否為「運作中」，再試換網路或改 DNS。';
   }
 
   renderShopping();                                              // 放在最後：此時第 22 節的常數都已初始化
